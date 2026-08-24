@@ -30,10 +30,10 @@
 
 ```shell
 mvn clean package
-java -jar target/bili-record.jar
+./scripts/run-desktop.ps1
 ```
 
-构建和测试输出均留在本地已忽略的 `target/` 目录中。
+启动脚本会运行一份隔离的 JAR 副本，之后再次执行 Maven 构建也不会损坏已打开的托盘进程。构建和测试输出均留在本地已忽略的 `target/` 目录中。
 
 ## 命令行诊断
 

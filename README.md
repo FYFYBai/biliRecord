@@ -41,10 +41,12 @@ and optionally Python 3.9+ for speech recognition.
 
 ```shell
 mvn clean package
-java -jar target/bili-record.jar
+./scripts/run-desktop.ps1
 ```
 
-Build and test output stays under the locally ignored `target/` directory.
+The launcher runs an isolated JAR copy so a later Maven build cannot corrupt an
+open tray process. Build and test output stays under the locally ignored
+`target/` directory.
 
 ## Command-line diagnostics
 
