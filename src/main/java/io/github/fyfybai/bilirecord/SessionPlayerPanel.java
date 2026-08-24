@@ -148,7 +148,7 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
 
     private JPanel buildControls() {
         JPanel panel = new PlayerControlsPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setLayout(new java.awt.BorderLayout());
         panel.setOpaque(false);
         panel.setBorder(BorderFactory.createEmptyBorder(2, 0, 7, 0));
 
@@ -173,7 +173,7 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
                 }
             }
         });
-        panel.add(slider);
+        panel.add(slider, java.awt.BorderLayout.NORTH);
 
         JPanel row = new JPanel();
         row.setOpaque(false);
@@ -193,13 +193,13 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
         row.add(rateButton);
         row.add(muteButton);
         row.add(fullscreenButton);
-        panel.add(row);
+        panel.add(row, java.awt.BorderLayout.CENTER);
 
         noticeLabel.setForeground(new Color(0xFFD06A));
         noticeLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         noticeLabel.setPreferredSize(new Dimension(10, 18));
         noticeLabel.setBorder(BorderFactory.createEmptyBorder(0, 12, 0, 12));
-        panel.add(noticeLabel);
+        panel.add(noticeLabel, java.awt.BorderLayout.SOUTH);
         panel.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseEntered(MouseEvent event) {

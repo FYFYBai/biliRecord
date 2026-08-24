@@ -51,7 +51,7 @@ final class TimelineSlider extends JSlider {
         copy.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         int width = getWidth();
         int y = getHeight() / 2;
-        int trackHeight = hovered || getValueIsAdjusting() ? 5 : 3;
+        int trackHeight = 3;
         int progressWidth = (int) Math.round(
                 width * ((getValue() - getMinimum()) / (double) Math.max(1, getMaximum() - getMinimum())));
         copy.setColor(new Color(255, 255, 255, 115));
