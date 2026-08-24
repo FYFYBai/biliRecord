@@ -3,7 +3,11 @@ package io.github.fyfybai.bilirecord;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
 import javax.swing.SwingUtilities;
+import javax.swing.JWindow;
+import javax.swing.event.PopupMenuEvent;
+import javax.swing.event.PopupMenuListener;
 import java.awt.AWTException;
+import java.awt.Color;
 import java.awt.Font;
 import java.awt.SystemTray;
 import java.awt.TrayIcon;
@@ -18,16 +22,21 @@ final class DesktopNotifier implements AutoCloseable {
     private final TrayIcon trayIcon;
     private final JMenuItem toggleItem;
     private final JPopupMenu trayMenu;
+    private final JWindow trayMenuAnchor;
 
     DesktopNotifier(Runnable showWindow, Runnable toggleMonitoring, Runnable exit) {
         if (!SystemTray.isSupported()) {
             trayIcon = null;
             toggleItem = null;
             trayMenu = null;
+            trayMenuAnchor = null;
             LOG.warning("System tray is not supported on this desktop");
             return;
         }
         trayMenu = new JPopupMenu();
+        trayMenuAnchor = new JWindow();
+        trayMenuAnchor.setSize(1, 1);
+        trayMenuAnchor.setBackground(new Color(0, 0, 0, 0));
         Font menuFont = UiTheme.uiFont(Font.PLAIN, 14f);
         trayMenu.setFont(menuFont);
         JMenuItem showItem = new JMenuItem("打开 " + UiTheme.APP_NAME);
@@ -43,6 +52,21 @@ final class DesktopNotifier implements AutoCloseable {
         trayMenu.add(toggleItem);
         trayMenu.addSeparator();
         trayMenu.add(exitItem);
+        trayMenu.addPopupMenuListener(new PopupMenuListener() {
+            @Override
+            public void popupMenuWillBecomeVisible(PopupMenuEvent event) {
+            }
+
+            @Override
+            public void popupMenuWillBecomeInvisible(PopupMenuEvent event) {
+                trayMenuAnchor.setVisible(false);
+            }
+
+            @Override
+            public void popupMenuCanceled(PopupMenuEvent event) {
+                trayMenuAnchor.setVisible(false);
+            }
+        });
 
         trayIcon = new TrayIcon(UiTheme.brandIcon(32).getImage(), UiTheme.APP_NAME);
         trayIcon.setImageAutoSize(true);
@@ -50,7 +74,7 @@ final class DesktopNotifier implements AutoCloseable {
         trayIcon.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent event) {
-                if (event.isPopupTrigger() || SwingUtilities.isRightMouseButton(event)) {
+                if (event.isPopupTrigger()) {
                     SwingUtilities.invokeLater(() -> showTrayMenu(event.getX(), event.getY()));
                 }
             }
@@ -96,6 +120,9 @@ final class DesktopNotifier implements AutoCloseable {
         if (trayMenu != null) {
             trayMenu.setVisible(false);
         }
+        if (trayMenuAnchor != null) {
+            trayMenuAnchor.dispose();
+        }
         if (trayIcon != null) {
             try {
                 SystemTray.getSystemTray().remove(trayIcon);
@@ -114,10 +141,10 @@ final class DesktopNotifier implements AutoCloseable {
     private void showTrayMenu(int screenX, int screenY) {
         trayMenu.setVisible(false);
         var size = trayMenu.getPreferredSize();
-        trayMenu.setLocation(
-                Math.max(0, screenX - size.width),
-                Math.max(0, screenY - size.height));
-        trayMenu.setInvoker(trayMenu);
-        trayMenu.setVisible(true);
+        int anchorX = Math.max(size.width, screenX);
+        int anchorY = Math.max(size.height, screenY);
+        trayMenuAnchor.setLocation(anchorX, anchorY);
+        trayMenuAnchor.setVisible(true);
+        trayMenu.show(trayMenuAnchor.getContentPane(), -size.width, -size.height);
     }
 }
