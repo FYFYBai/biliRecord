@@ -53,6 +53,15 @@ final class UiTheme {
                         + "focusedBackground: #FB7299; borderWidth: 0; focusWidth: 0; arc: 8");
     }
 
+    static void blue(JButton button) {
+        button.setBackground(BLUE);
+        button.setForeground(Color.WHITE);
+        button.putClientProperty("FlatLaf.style",
+                "background: #00AEEC; hoverBackground: #22B9EF; pressedBackground: #0099D1;"
+                        + "focusedBackground: #00AEEC; foreground: #FFFFFF; borderWidth: 0;"
+                        + "focusWidth: 0; arc: 8");
+    }
+
     static void outline(JButton button) {
         button.setBackground(SURFACE);
         button.setForeground(TEXT);

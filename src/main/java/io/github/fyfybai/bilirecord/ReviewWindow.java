@@ -1,6 +1,8 @@
 package io.github.fyfybai.bilirecord;
 
 import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
@@ -195,7 +197,7 @@ final class ReviewWindow {
         modelChoice.setToolTipText("本地语音识别模型");
         deviceChoice.setToolTipText("推理设备");
         languageChoice.setToolTipText("音频语言");
-        UiTheme.outline(exportButton);
+        UiTheme.blue(exportButton);
         exportButton.addActionListener(event -> ClipExportWindow.open(
                 frame,
                 timeline,
@@ -206,8 +208,15 @@ final class ReviewWindow {
         asr.add(modelChoice);
         asr.add(deviceChoice);
         asr.add(languageChoice);
-        asr.add(exportButton);
-        asr.add(transcribeButton);
+        JPanel actions = new JPanel();
+        actions.setOpaque(false);
+        actions.setLayout(new BoxLayout(actions, BoxLayout.Y_AXIS));
+        transcribeButton.setAlignmentX(JButton.RIGHT_ALIGNMENT);
+        exportButton.setAlignmentX(JButton.RIGHT_ALIGNMENT);
+        actions.add(transcribeButton);
+        actions.add(Box.createVerticalStrut(6));
+        actions.add(exportButton);
+        asr.add(actions);
         header.add(asr, BorderLayout.EAST);
         return header;
     }

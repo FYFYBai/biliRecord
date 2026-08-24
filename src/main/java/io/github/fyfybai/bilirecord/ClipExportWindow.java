@@ -249,8 +249,10 @@ final class ClipExportWindow {
         progress.setValue(1000);
         status.setText("导出完成：" + result.output().getFileName());
         LOG.info("Exported clip to " + result.output());
+        Window owner = dialog.getOwner();
+        dialog.dispose();
         JOptionPane.showMessageDialog(
-                dialog,
+                owner,
                 "片段已导出到：\n" + result.output(),
                 "导出完成",
                 JOptionPane.INFORMATION_MESSAGE);
