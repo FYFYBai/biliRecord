@@ -59,7 +59,7 @@ final class TranscriptionService {
         String detectedLanguage = config.language().isBlank() ? "auto" : config.language();
         try {
             Process process = start(command, false);
-            Thread stderrReader = readStderr(process, progress, stderrTail);
+            Thread stderrReader = readStderr(process, stderrTail);
             try (BufferedReader reader = process.inputReader(StandardCharsets.UTF_8)) {
                 String line;
                 while ((line = reader.readLine()) != null) {
@@ -111,19 +111,19 @@ final class TranscriptionService {
             List<String> python = findPython();
             List<String> command = new ArrayList<>(python);
             command.addAll(List.of("-m", "venv", ROOT.resolve("venv").toString()));
-            runCommand(command, progress);
+            runCommand(command);
         }
         Path marker = ROOT.resolve("venv").resolve("faster-whisper-" + FASTER_WHISPER_VERSION);
         if (!Files.exists(marker)) {
             progress.update(-1, "正在安装 faster-whisper（仅首次需要）");
             runCommand(List.of(
                     venvPython().toString(), "-m", "pip", "install",
-                    "--disable-pip-version-check", "faster-whisper==" + FASTER_WHISPER_VERSION), progress);
+                    "--disable-pip-version-check", "faster-whisper==" + FASTER_WHISPER_VERSION));
             Files.createFile(marker);
         }
     }
 
-    private void runCommand(List<String> command, Progress progress)
+    private void runCommand(List<String> command)
             throws IOException, InterruptedException {
         Process process = start(command, true);
         String tail = "";
@@ -133,7 +133,6 @@ final class TranscriptionService {
             while ((line = reader.readLine()) != null) {
                 tail = line;
                 LOG.info(line);
-                progress.update(-1, line);
             }
         }
         int exitCode = waitFor(process);
@@ -153,7 +152,6 @@ final class TranscriptionService {
 
     private Thread readStderr(
             Process process,
-            Progress progress,
             AtomicReference<String> tail) {
         return Thread.ofVirtual().start(() -> {
             try (BufferedReader reader = process.errorReader(StandardCharsets.UTF_8)) {
@@ -161,7 +159,6 @@ final class TranscriptionService {
                 while ((line = reader.readLine()) != null) {
                     tail.set(line);
                     LOG.info(line);
-                    progress.update(-1, line);
                 }
             } catch (IOException exception) {
                 LOG.fine("ASR stderr reader closed: " + exception.getMessage());

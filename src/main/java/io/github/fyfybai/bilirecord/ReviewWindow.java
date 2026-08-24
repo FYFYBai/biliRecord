@@ -58,6 +58,9 @@ final class ReviewWindow {
 
     private SessionTimeline timeline;
     private SessionPlayerPanel player;
+    private JPanel headerPanel;
+    private JPanel timelinePanel;
+    private JSplitPane splitPane;
     private volatile Thread transcriptionWorker;
 
     private ReviewWindow(SessionTimeline timeline) {
@@ -101,27 +104,55 @@ final class ReviewWindow {
     private JPanel buildContent() {
         JPanel root = new JPanel(new BorderLayout());
         root.setBackground(UiTheme.BACKGROUND);
-        root.add(buildHeader(), BorderLayout.NORTH);
+        headerPanel = buildHeader();
+        root.add(headerPanel, BorderLayout.NORTH);
 
         JPanel playerPanel;
         try {
-            player = new SessionPlayerPanel(timeline);
+            player = new SessionPlayerPanel(timeline, frame, this::setPlayerFullscreen);
             playerPanel = player;
         } catch (RuntimeException | LinkageError exception) {
             LOG.log(Level.WARNING, "VLC player is unavailable", exception);
             playerPanel = unavailablePlayer(exception.getMessage());
         }
 
-        JSplitPane split = new JSplitPane(
+        timelinePanel = buildTimelinePanel();
+        splitPane = new JSplitPane(
                 JSplitPane.HORIZONTAL_SPLIT,
                 playerPanel,
-                buildTimelinePanel());
-        split.setResizeWeight(0.62);
-        split.setDividerLocation(720);
-        split.setBorder(BorderFactory.createEmptyBorder(12, 16, 16, 16));
-        split.setBackground(UiTheme.BACKGROUND);
-        root.add(split, BorderLayout.CENTER);
+                timelinePanel);
+        splitPane.setResizeWeight(0.62);
+        splitPane.setDividerLocation(720);
+        splitPane.setBorder(BorderFactory.createEmptyBorder(12, 16, 16, 16));
+        splitPane.setBackground(UiTheme.BACKGROUND);
+        root.add(splitPane, BorderLayout.CENTER);
         return root;
+    }
+
+    private void setPlayerFullscreen(boolean fullscreen) {
+        Runnable update = () -> {
+            if (headerPanel == null || splitPane == null || timelinePanel == null) {
+                return;
+            }
+            headerPanel.setVisible(!fullscreen);
+            if (fullscreen) {
+                splitPane.setRightComponent(null);
+                splitPane.setDividerSize(0);
+                splitPane.setBorder(null);
+            } else {
+                splitPane.setRightComponent(timelinePanel);
+                splitPane.setDividerSize(10);
+                splitPane.setBorder(BorderFactory.createEmptyBorder(12, 16, 16, 16));
+                splitPane.setDividerLocation(0.62);
+            }
+            frame.revalidate();
+            frame.repaint();
+        };
+        if (SwingUtilities.isEventDispatchThread()) {
+            update.run();
+        } else {
+            SwingUtilities.invokeLater(update);
+        }
     }
 
     private JPanel buildHeader() {

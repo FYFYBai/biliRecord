@@ -19,6 +19,7 @@
         <sqlite.version>3.53.2.1</sqlite.version>
         <flatlaf.version>3.7.2</flatlaf.version>
         <vlcj.version>4.8.3</vlcj.version>
+        <ikonli.version>12.3.1</ikonli.version>
     </properties>
 
     <dependencies>
@@ -51,6 +52,16 @@
             <groupId>uk.co.caprica</groupId>
             <artifactId>vlcj</artifactId>
             <version>${vlcj.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.kordamp.ikonli</groupId>
+            <artifactId>ikonli-swing</artifactId>
+            <version>${ikonli.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.kordamp.ikonli</groupId>
+            <artifactId>ikonli-bootstrapicons-pack</artifactId>
+            <version>${ikonli.version}</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

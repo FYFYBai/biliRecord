@@ -1,23 +1,26 @@
 package io.github.fyfybai.bilirecord;
 
+import org.kordamp.ikonli.Ikon;
+import org.kordamp.ikonli.bootstrapicons.BootstrapIcons;
+import org.kordamp.ikonli.swing.FontIcon;
 import uk.co.caprica.vlcj.factory.discovery.NativeDiscovery;
 import uk.co.caprica.vlcj.player.base.MediaPlayer;
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter;
-import uk.co.caprica.vlcj.player.component.EmbeddedMediaPlayerComponent;
+import uk.co.caprica.vlcj.player.component.CallbackMediaPlayerComponent;
+import uk.co.caprica.vlcj.player.component.callback.ScaledCallbackImagePainter;
+import uk.co.caprica.vlcj.player.embedded.fullscreen.adaptive.AdaptiveFullScreenStrategy;
 
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
-import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JLayeredPane;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JSlider;
-import javax.swing.JSplitPane;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
@@ -26,8 +29,11 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
-import java.awt.GraphicsDevice;
-import java.awt.GraphicsEnvironment;
+import java.awt.AlphaComposite;
+import java.awt.GradientPaint;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -43,19 +49,21 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
     private static final long SEEK_STEP_MS = 5_000;
 
     private final SessionTimeline timeline;
-    private final EmbeddedMediaPlayerComponent playerComponent;
+    private final CallbackMediaPlayerComponent playerComponent;
     private final JLayeredPane videoLayer = new VideoLayer();
     private final TimelineSlider slider = new TimelineSlider();
-    private final JButton playButton = playerButton(">", "播放 / 暂停");
-    private final JButton muteButton = playerButton("V", "静音");
-    private final JButton rateButton = playerButton("1x", "播放速度");
-    private final JButton fullscreenButton = playerButton("[ ]", "全屏");
+    private final JButton playButton = iconButton(BootstrapIcons.PLAY_FILL, "播放 / 暂停");
+    private final JButton muteButton = iconButton(BootstrapIcons.VOLUME_UP_FILL, "静音");
+    private final JButton rateButton = textButton("1x", "播放速度");
+    private final JButton fullscreenButton = iconButton(BootstrapIcons.FULLSCREEN, "全屏");
     private final JSlider volumeSlider = new JSlider(0, 100, 80);
     private final JLabel timeLabel = playerLabel("00:00 / 00:00");
     private final JLabel segmentLabel = playerLabel("分段 --/--");
     private final JLabel noticeLabel = playerLabel(" ");
     private final JPanel controls;
     private final Timer overlayTimer;
+    private final Timer fadeTimer;
+    private final boolean fullscreenSupported;
     private Consumer<Long> positionListener = ignored -> { };
 
     private SessionSegment currentSegment;
@@ -66,21 +74,47 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
     private boolean updatingSlider;
     private boolean controlHover;
     private boolean closed;
-    private JFrame fullscreenFrame;
-    private JSplitPane ownerSplit;
-    private Component splitPlaceholder;
-    private int ownerDividerLocation;
+    private float controlOpacity = 1f;
+    private float targetOpacity = 1f;
 
     SessionPlayerPanel(SessionTimeline timeline) {
+        this(timeline, null, ignored -> { });
+    }
+
+    SessionPlayerPanel(
+            SessionTimeline timeline,
+            Window fullscreenWindow,
+            Consumer<Boolean> fullscreenListener) {
         super(new java.awt.BorderLayout());
         this.timeline = timeline;
+        fullscreenSupported = fullscreenWindow != null;
         discoverVlc();
-        playerComponent = new EmbeddedMediaPlayerComponent();
+        playerComponent = new CallbackMediaPlayerComponent();
+        playerComponent.setImagePainter(new ScaledCallbackImagePainter());
         playerComponent.setBackground(Color.BLACK);
         playerComponent.mediaPlayer().events().addMediaPlayerEventListener(new PlayerEvents());
+        if (fullscreenWindow != null) {
+            playerComponent.mediaPlayer().fullScreen().strategy(
+                    new AdaptiveFullScreenStrategy(fullscreenWindow) {
+                        @Override
+                        protected void onBeforeEnterFullScreen() {
+                            fullscreenListener.accept(true);
+                            setButtonIcon(fullscreenButton, BootstrapIcons.FULLSCREEN_EXIT);
+                        }
+
+                        @Override
+                        protected void onAfterExitFullScreen() {
+                            fullscreenListener.accept(false);
+                            setButtonIcon(fullscreenButton, BootstrapIcons.FULLSCREEN);
+                        }
+                    });
+        } else {
+            fullscreenButton.setEnabled(false);
+        }
         controls = buildControls();
         overlayTimer = new Timer(1_800, event -> hideControls());
         overlayTimer.setRepeats(false);
+        fadeTimer = new Timer(16, event -> advanceControlFade());
 
         setBackground(Color.BLACK);
         setMinimumSize(new Dimension(480, 320));
@@ -99,9 +133,9 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
     }
 
     private JPanel buildControls() {
-        JPanel panel = new JPanel();
+        JPanel panel = new PlayerControlsPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(new Color(0x151515));
+        panel.setOpaque(false);
         panel.setBorder(BorderFactory.createEmptyBorder(2, 12, 7, 12));
 
         slider.setOpaque(false);
@@ -233,7 +267,9 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
     private void updateMuteButton() {
         boolean muted = playerComponent.mediaPlayer().audio().isMute()
                 || volumeSlider.getValue() == 0;
-        muteButton.setText(muted ? "V-" : "V");
+        setButtonIcon(muteButton, muted
+                ? BootstrapIcons.VOLUME_MUTE_FILL
+                : BootstrapIcons.VOLUME_UP_FILL);
         muteButton.setToolTipText(muted ? "取消静音" : "静音");
     }
 
@@ -277,7 +313,7 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
         if (index >= 0 && index + 1 < segments.size()) {
             playSegment(segments.get(index + 1), 0);
         } else {
-            playButton.setText(">");
+            setButtonIcon(playButton, BootstrapIcons.PLAY_FILL);
             showControls();
         }
     }
@@ -367,65 +403,21 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
     }
 
     private void toggleFullscreen() {
-        if (fullscreenFrame == null) {
-            enterFullscreen();
-        } else {
-            exitFullscreen();
+        if (fullscreenSupported) {
+            playerComponent.mediaPlayer().fullScreen().toggle();
         }
-    }
-
-    private void enterFullscreen() {
-        if (!(getParent() instanceof JSplitPane split)) {
-            return;
-        }
-        ownerSplit = split;
-        ownerDividerLocation = split.getDividerLocation();
-        splitPlaceholder = new JPanel();
-        splitPlaceholder.setBackground(Color.BLACK);
-        if (split.getLeftComponent() == this) {
-            split.setLeftComponent(splitPlaceholder);
-        } else {
-            split.setRightComponent(splitPlaceholder);
-        }
-
-        JFrame window = new JFrame();
-        window.setUndecorated(true);
-        window.setBackground(Color.BLACK);
-        window.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-        window.add(this);
-        fullscreenFrame = window;
-        GraphicsDevice device = GraphicsEnvironment
-                .getLocalGraphicsEnvironment().getDefaultScreenDevice();
-        device.setFullScreenWindow(window);
-        showControls();
-        requestFocusInWindow();
     }
 
     private void exitFullscreen() {
-        JFrame window = fullscreenFrame;
-        JSplitPane split = ownerSplit;
-        if (window == null || split == null) {
-            return;
+        if (fullscreenSupported && playerComponent.mediaPlayer().fullScreen().isFullScreen()) {
+            playerComponent.mediaPlayer().fullScreen().set(false);
         }
-        GraphicsDevice device = GraphicsEnvironment
-                .getLocalGraphicsEnvironment().getDefaultScreenDevice();
-        device.setFullScreenWindow(null);
-        window.remove(this);
-        window.dispose();
-        fullscreenFrame = null;
-        if (split.getLeftComponent() == splitPlaceholder) {
-            split.setLeftComponent(this);
-        } else {
-            split.setRightComponent(this);
-        }
-        split.setDividerLocation(ownerDividerLocation);
-        ownerSplit = null;
-        splitPlaceholder = null;
-        showControls();
     }
 
     private void showControls() {
         controls.setVisible(true);
+        targetOpacity = 1f;
+        fadeTimer.restart();
         scheduleControlHide();
     }
 
@@ -438,7 +430,21 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
 
     private void hideControls() {
         if (!controlHover && !sliderChanging && playerComponent.mediaPlayer().status().isPlaying()) {
-            controls.setVisible(false);
+            targetOpacity = 0f;
+            fadeTimer.restart();
+        }
+    }
+
+    private void advanceControlFade() {
+        float direction = Math.signum(targetOpacity - controlOpacity);
+        controlOpacity = Math.max(0, Math.min(1, controlOpacity + direction * 0.14f));
+        controls.repaint();
+        if (Math.abs(targetOpacity - controlOpacity) < 0.01f) {
+            controlOpacity = targetOpacity;
+            fadeTimer.stop();
+            if (controlOpacity == 0) {
+                controls.setVisible(false);
+            }
         }
     }
 
@@ -446,26 +452,45 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
     public void close() {
         closed = true;
         overlayTimer.stop();
+        fadeTimer.stop();
         exitFullscreen();
         playerComponent.release();
     }
 
-    private static JButton playerButton(String text, String tooltip) {
-        JButton button = new JButton(text);
+    private static JButton iconButton(Ikon icon, String tooltip) {
+        JButton button = playerButton(tooltip);
+        setButtonIcon(button, icon);
+        return button;
+    }
+
+    private static JButton textButton(String text, String tooltip) {
+        JButton button = playerButton(tooltip);
+        button.setText(text);
+        return button;
+    }
+
+    private static JButton playerButton(String tooltip) {
+        JButton button = new JButton();
         button.setToolTipText(tooltip);
         button.setForeground(Color.WHITE);
-        button.setFont(button.getFont().deriveFont(java.awt.Font.BOLD, 15f));
+        button.setFont(UiTheme.uiFont(java.awt.Font.BOLD, 13f));
         button.setHorizontalAlignment(SwingConstants.CENTER);
         button.setPreferredSize(new Dimension(40, 32));
         button.setMaximumSize(new Dimension(54, 32));
         button.setBorder(BorderFactory.createEmptyBorder(2, 7, 2, 7));
         button.setBorderPainted(false);
-        button.setContentAreaFilled(false);
+        button.setContentAreaFilled(true);
+        button.setOpaque(false);
         button.setFocusPainted(false);
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         button.putClientProperty("FlatLaf.style",
-                "foreground: #FFFFFF; hoverForeground: #FB7299; focusWidth: 0");
+                "background: #00151515; hoverBackground: #33FFFFFF; pressedBackground: #44FFFFFF;"
+                        + "foreground: #FFFFFF; focusWidth: 0; borderWidth: 0; arc: 6");
         return button;
+    }
+
+    private static void setButtonIcon(JButton button, Ikon icon) {
+        button.setIcon(FontIcon.of(icon, 19, Color.WHITE));
     }
 
     private static JLabel playerLabel(String text) {
@@ -516,6 +541,27 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
         }
     }
 
+    private final class PlayerControlsPanel extends JPanel {
+        @Override
+        protected void paintComponent(Graphics graphics) {
+            Graphics2D copy = (Graphics2D) graphics.create();
+            copy.setComposite(AlphaComposite.SrcOver.derive(controlOpacity));
+            copy.setPaint(new GradientPaint(
+                    0, 0, new Color(0, 0, 0, 25),
+                    0, getHeight(), new Color(12, 12, 12, 235)));
+            copy.fillRect(0, 0, getWidth(), getHeight());
+            copy.dispose();
+        }
+
+        @Override
+        protected void paintChildren(Graphics graphics) {
+            Graphics2D copy = (Graphics2D) graphics.create();
+            copy.setComposite(AlphaComposite.SrcOver.derive(controlOpacity));
+            super.paintChildren(copy);
+            copy.dispose();
+        }
+    }
+
     private final class PlayerEvents extends MediaPlayerEventAdapter {
         @Override
         public void playing(MediaPlayer mediaPlayer) {
@@ -528,7 +574,7 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
                     pendingSeekMs = -1;
                 }
                 playerComponent.mediaPlayer().controls().setRate(playbackRate);
-                playButton.setText("||");
+                setButtonIcon(playButton, BootstrapIcons.PAUSE_FILL);
                 scheduleControlHide();
             });
         }
@@ -536,7 +582,7 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
         @Override
         public void paused(MediaPlayer mediaPlayer) {
             SwingUtilities.invokeLater(() -> {
-                playButton.setText(">");
+                setButtonIcon(playButton, BootstrapIcons.PLAY_FILL);
                 showControls();
             });
         }
@@ -555,7 +601,7 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
         public void error(MediaPlayer mediaPlayer) {
             SwingUtilities.invokeLater(() -> {
                 noticeLabel.setText("播放失败，详情见日志");
-                playButton.setText(">");
+                setButtonIcon(playButton, BootstrapIcons.PLAY_FILL);
                 showControls();
                 AppLog.get(SessionPlayerPanel.class).warning("VLC playback failed");
             });
