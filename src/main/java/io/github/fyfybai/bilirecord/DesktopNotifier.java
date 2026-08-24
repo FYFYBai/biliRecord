@@ -1,12 +1,14 @@
 package io.github.fyfybai.bilirecord;
 
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
 import javax.swing.SwingUtilities;
 import java.awt.AWTException;
 import java.awt.Font;
-import java.awt.MenuItem;
-import java.awt.PopupMenu;
 import java.awt.SystemTray;
 import java.awt.TrayIcon;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -14,35 +16,52 @@ final class DesktopNotifier implements AutoCloseable {
     private static final Logger LOG = AppLog.get(DesktopNotifier.class);
 
     private final TrayIcon trayIcon;
-    private final MenuItem toggleItem;
+    private final JMenuItem toggleItem;
+    private final JPopupMenu trayMenu;
 
     DesktopNotifier(Runnable showWindow, Runnable toggleMonitoring, Runnable exit) {
         if (!SystemTray.isSupported()) {
             trayIcon = null;
             toggleItem = null;
+            trayMenu = null;
             LOG.warning("System tray is not supported on this desktop");
             return;
         }
-        PopupMenu menu = new PopupMenu();
+        trayMenu = new JPopupMenu();
         Font menuFont = UiTheme.uiFont(Font.PLAIN, 14f);
-        menu.setFont(menuFont);
-        MenuItem showItem = new MenuItem("打开 biliRecord");
+        trayMenu.setFont(menuFont);
+        JMenuItem showItem = new JMenuItem("打开 biliRecord");
         showItem.setFont(menuFont);
         showItem.addActionListener(event -> SwingUtilities.invokeLater(showWindow));
-        toggleItem = new MenuItem("开始监控");
+        toggleItem = new JMenuItem("开始监控");
         toggleItem.setFont(menuFont);
         toggleItem.addActionListener(event -> SwingUtilities.invokeLater(toggleMonitoring));
-        MenuItem exitItem = new MenuItem("退出");
+        JMenuItem exitItem = new JMenuItem("退出");
         exitItem.setFont(menuFont);
         exitItem.addActionListener(event -> SwingUtilities.invokeLater(exit));
-        menu.add(showItem);
-        menu.add(toggleItem);
-        menu.addSeparator();
-        menu.add(exitItem);
+        trayMenu.add(showItem);
+        trayMenu.add(toggleItem);
+        trayMenu.addSeparator();
+        trayMenu.add(exitItem);
 
-        trayIcon = new TrayIcon(UiTheme.brandIcon(32).getImage(), "biliRecord", menu);
+        trayIcon = new TrayIcon(UiTheme.brandIcon(32).getImage(), "biliRecord");
         trayIcon.setImageAutoSize(true);
         trayIcon.addActionListener(event -> SwingUtilities.invokeLater(showWindow));
+        trayIcon.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent event) {
+                if (event.isPopupTrigger() || SwingUtilities.isRightMouseButton(event)) {
+                    SwingUtilities.invokeLater(() -> showTrayMenu(event.getX(), event.getY()));
+                }
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent event) {
+                if (event.isPopupTrigger()) {
+                    SwingUtilities.invokeLater(() -> showTrayMenu(event.getX(), event.getY()));
+                }
+            }
+        });
         try {
             SystemTray.getSystemTray().add(trayIcon);
         } catch (AWTException exception) {
@@ -52,7 +71,7 @@ final class DesktopNotifier implements AutoCloseable {
 
     void setMonitoring(boolean monitoring) {
         if (toggleItem != null) {
-            toggleItem.setLabel(monitoring ? "停止监控" : "开始监控");
+            toggleItem.setText(monitoring ? "停止监控" : "开始监控");
         }
     }
 
@@ -74,6 +93,9 @@ final class DesktopNotifier implements AutoCloseable {
 
     @Override
     public void close() {
+        if (trayMenu != null) {
+            trayMenu.setVisible(false);
+        }
         if (trayIcon != null) {
             try {
                 SystemTray.getSystemTray().remove(trayIcon);
@@ -87,5 +109,15 @@ final class DesktopNotifier implements AutoCloseable {
         if (trayIcon != null) {
             trayIcon.displayMessage(title, message, type);
         }
+    }
+
+    private void showTrayMenu(int screenX, int screenY) {
+        trayMenu.setVisible(false);
+        var size = trayMenu.getPreferredSize();
+        trayMenu.setLocation(
+                Math.max(0, screenX - size.width),
+                Math.max(0, screenY - size.height));
+        trayMenu.setInvoker(trayMenu);
+        trayMenu.setVisible(true);
     }
 }

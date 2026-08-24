@@ -56,13 +56,17 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
     private final JButton muteButton = iconButton(BootstrapIcons.VOLUME_UP_FILL, "静音");
     private final JButton rateButton = textButton("1x", "播放速度");
     private final JButton fullscreenButton = iconButton(BootstrapIcons.FULLSCREEN, "全屏");
+    private final JButton centerPlayButton = iconButton(BootstrapIcons.PLAY_FILL, "播放", 34);
     private final JSlider volumeSlider = new JSlider(0, 100, 80);
     private final JLabel timeLabel = playerLabel("00:00 / 00:00");
     private final JLabel segmentLabel = playerLabel("分段 --/--");
     private final JLabel noticeLabel = playerLabel(" ");
     private final JPanel controls;
+    private final JPanel volumePopup;
     private final Timer overlayTimer;
     private final Timer fadeTimer;
+    private final Timer volumeHideTimer;
+    private final Timer singleClickTimer;
     private final boolean fullscreenSupported;
     private Consumer<Long> positionListener = ignored -> { };
 
@@ -74,6 +78,7 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
     private boolean updatingSlider;
     private boolean controlHover;
     private boolean closed;
+    private int lastAudibleVolume = 80;
     private float controlOpacity = 1f;
     private float targetOpacity = 1f;
 
@@ -112,9 +117,14 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
             fullscreenButton.setEnabled(false);
         }
         controls = buildControls();
+        volumePopup = buildVolumePopup();
         overlayTimer = new Timer(1_800, event -> hideControls());
         overlayTimer.setRepeats(false);
         fadeTimer = new Timer(16, event -> advanceControlFade());
+        volumeHideTimer = new Timer(220, event -> hideVolumePopup());
+        volumeHideTimer.setRepeats(false);
+        singleClickTimer = new Timer(220, event -> togglePlayback());
+        singleClickTimer.setRepeats(false);
 
         setBackground(Color.BLACK);
         setMinimumSize(new Dimension(480, 320));
@@ -122,6 +132,9 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
         videoLayer.setOpaque(true);
         videoLayer.add(playerComponent, JLayeredPane.DEFAULT_LAYER);
         videoLayer.add(controls, JLayeredPane.PALETTE_LAYER);
+        configureCenterPlayButton();
+        videoLayer.add(centerPlayButton, JLayeredPane.DRAG_LAYER);
+        videoLayer.add(volumePopup, JLayeredPane.MODAL_LAYER);
         add(videoLayer, java.awt.BorderLayout.CENTER);
 
         updatingSlider = true;
@@ -170,6 +183,7 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
         muteButton.addActionListener(event -> toggleMute());
         rateButton.addActionListener(event -> showRateMenu());
         fullscreenButton.addActionListener(event -> toggleFullscreen());
+        configureVolumeButtonHover();
         row.add(playButton);
         row.add(Box.createHorizontalStrut(4));
         row.add(timeLabel);
@@ -178,23 +192,6 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
         row.add(Box.createHorizontalStrut(10));
         row.add(rateButton);
         row.add(muteButton);
-
-        volumeSlider.setOpaque(false);
-        volumeSlider.setPreferredSize(new Dimension(82, 24));
-        volumeSlider.setMaximumSize(new Dimension(82, 24));
-        volumeSlider.setToolTipText("音量");
-        volumeSlider.putClientProperty("FlatLaf.style",
-                "trackColor: #747474; thumbColor: #FFFFFF; focusWidth: 0; trackWidth: 3");
-        volumeSlider.addChangeListener(event -> {
-            int volume = volumeSlider.getValue();
-            playerComponent.mediaPlayer().audio().setVolume(volume);
-            if (volume > 0 && playerComponent.mediaPlayer().audio().isMute()) {
-                playerComponent.mediaPlayer().audio().setMute(false);
-            }
-            updateMuteButton();
-        });
-        playerComponent.mediaPlayer().audio().setVolume(volumeSlider.getValue());
-        row.add(volumeSlider);
         row.add(fullscreenButton);
         panel.add(row);
 
@@ -216,6 +213,69 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
             }
         });
         return panel;
+    }
+
+    private JPanel buildVolumePopup() {
+        JPanel popup = new JPanel(new java.awt.BorderLayout());
+        popup.setBackground(new Color(22, 22, 22, 225));
+        popup.setBorder(BorderFactory.createEmptyBorder(9, 7, 9, 7));
+        popup.setVisible(false);
+
+        volumeSlider.setOrientation(SwingConstants.VERTICAL);
+        volumeSlider.setOpaque(false);
+        volumeSlider.setPreferredSize(new Dimension(28, 92));
+        volumeSlider.setToolTipText("音量");
+        volumeSlider.putClientProperty("FlatLaf.style",
+                "trackColor: #747474; thumbColor: #FFFFFF; focusWidth: 0; trackWidth: 3");
+        volumeSlider.addChangeListener(event -> applyVolume(volumeSlider.getValue()));
+        playerComponent.mediaPlayer().audio().setVolume(volumeSlider.getValue());
+        popup.add(volumeSlider, java.awt.BorderLayout.CENTER);
+        popup.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent event) {
+                volumeHideTimer.stop();
+            }
+
+            @Override
+            public void mouseExited(MouseEvent event) {
+                scheduleVolumeHide();
+            }
+        });
+        volumeSlider.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent event) {
+                volumeHideTimer.stop();
+            }
+
+            @Override
+            public void mouseExited(MouseEvent event) {
+                scheduleVolumeHide();
+            }
+        });
+        return popup;
+    }
+
+    private void configureVolumeButtonHover() {
+        muteButton.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent event) {
+                showVolumePopup();
+            }
+
+            @Override
+            public void mouseExited(MouseEvent event) {
+                scheduleVolumeHide();
+            }
+        });
+    }
+
+    private void configureCenterPlayButton() {
+        centerPlayButton.setPreferredSize(new Dimension(68, 68));
+        centerPlayButton.setMaximumSize(new Dimension(68, 68));
+        centerPlayButton.putClientProperty("FlatLaf.style",
+                "background: #99111111; hoverBackground: #BB111111; pressedBackground: #DD111111;"
+                        + "foreground: #FFFFFF; focusWidth: 0; borderWidth: 0; arc: 999");
+        centerPlayButton.addActionListener(event -> togglePlayback());
     }
 
     void setPositionListener(Consumer<Long> listener) {
@@ -258,10 +318,27 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
     }
 
     private void toggleMute() {
-        playerComponent.mediaPlayer().audio().setMute(
-                !playerComponent.mediaPlayer().audio().isMute());
+        boolean audible = volumeSlider.getValue() > 0
+                && !playerComponent.mediaPlayer().audio().isMute();
+        if (audible) {
+            lastAudibleVolume = volumeSlider.getValue();
+            volumeSlider.setValue(0);
+        } else {
+            volumeSlider.setValue(Math.max(1, lastAudibleVolume));
+        }
         updateMuteButton();
         showControls();
+    }
+
+    private void applyVolume(int volume) {
+        if (volume > 0) {
+            lastAudibleVolume = volume;
+            playerComponent.mediaPlayer().audio().setMute(false);
+        } else {
+            playerComponent.mediaPlayer().audio().setMute(true);
+        }
+        playerComponent.mediaPlayer().audio().setVolume(volume);
+        updateMuteButton();
     }
 
     private void updateMuteButton() {
@@ -271,6 +348,41 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
                 ? BootstrapIcons.VOLUME_MUTE_FILL
                 : BootstrapIcons.VOLUME_UP_FILL);
         muteButton.setToolTipText(muted ? "取消静音" : "静音");
+    }
+
+    private void showVolumePopup() {
+        volumeHideTimer.stop();
+        showControls();
+        SwingUtilities.invokeLater(() -> {
+            java.awt.Point button = SwingUtilities.convertPoint(muteButton, 0, 0, videoLayer);
+            Dimension size = volumePopup.getPreferredSize();
+            int width = Math.max(42, size.width);
+            int height = Math.max(110, size.height);
+            int x = Math.max(4, Math.min(videoLayer.getWidth() - width - 4,
+                    button.x + (muteButton.getWidth() - width) / 2));
+            int y = Math.max(4, button.y - height + 3);
+            volumePopup.setBounds(x, y, width, height);
+            volumePopup.setVisible(true);
+            volumePopup.repaint();
+        });
+    }
+
+    private void scheduleVolumeHide() {
+        volumeHideTimer.restart();
+    }
+
+    private void hideVolumePopup() {
+        java.awt.Point pointer;
+        try {
+            pointer = java.awt.MouseInfo.getPointerInfo().getLocation();
+            SwingUtilities.convertPointFromScreen(pointer, videoLayer);
+        } catch (RuntimeException exception) {
+            volumePopup.setVisible(false);
+            return;
+        }
+        if (!volumePopup.getBounds().contains(pointer)) {
+            volumePopup.setVisible(false);
+        }
     }
 
     private void showRateMenu() {
@@ -364,9 +476,10 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
             @Override
             public void mouseClicked(MouseEvent event) {
                 if (event.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(event)) {
+                    singleClickTimer.stop();
                     toggleFullscreen();
                 } else if (event.getClickCount() == 1 && SwingUtilities.isLeftMouseButton(event)) {
-                    togglePlayback();
+                    singleClickTimer.restart();
                 }
             }
         };
@@ -429,9 +542,27 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
     }
 
     private void hideControls() {
-        if (!controlHover && !sliderChanging && playerComponent.mediaPlayer().status().isPlaying()) {
+        if ((controlHover || pointerInside(controls) || pointerInside(volumePopup))
+                && playerComponent.mediaPlayer().status().isPlaying()) {
+            overlayTimer.restart();
+            return;
+        }
+        if (!sliderChanging && playerComponent.mediaPlayer().status().isPlaying()) {
             targetOpacity = 0f;
             fadeTimer.restart();
+        }
+    }
+
+    private boolean pointerInside(Component component) {
+        if (!component.isShowing()) {
+            return false;
+        }
+        try {
+            java.awt.Point pointer = java.awt.MouseInfo.getPointerInfo().getLocation();
+            SwingUtilities.convertPointFromScreen(pointer, component);
+            return component.contains(pointer);
+        } catch (RuntimeException exception) {
+            return false;
         }
     }
 
@@ -453,13 +584,19 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
         closed = true;
         overlayTimer.stop();
         fadeTimer.stop();
+        volumeHideTimer.stop();
+        singleClickTimer.stop();
         exitFullscreen();
         playerComponent.release();
     }
 
     private static JButton iconButton(Ikon icon, String tooltip) {
+        return iconButton(icon, tooltip, 19);
+    }
+
+    private static JButton iconButton(Ikon icon, String tooltip, int size) {
         JButton button = playerButton(tooltip);
-        setButtonIcon(button, icon);
+        button.setIcon(FontIcon.of(icon, size, Color.WHITE));
         return button;
     }
 
@@ -538,6 +675,12 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
             int height = getHeight();
             playerComponent.setBounds(0, 0, width, height);
             controls.setBounds(0, Math.max(0, height - CONTROL_HEIGHT), width, CONTROL_HEIGHT);
+            int centerSize = 68;
+            centerPlayButton.setBounds(
+                    Math.max(0, (width - centerSize) / 2),
+                    Math.max(0, (height - centerSize) / 2),
+                    centerSize,
+                    centerSize);
         }
     }
 
@@ -575,6 +718,7 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
                 }
                 playerComponent.mediaPlayer().controls().setRate(playbackRate);
                 setButtonIcon(playButton, BootstrapIcons.PAUSE_FILL);
+                centerPlayButton.setVisible(false);
                 scheduleControlHide();
             });
         }
@@ -583,6 +727,7 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
         public void paused(MediaPlayer mediaPlayer) {
             SwingUtilities.invokeLater(() -> {
                 setButtonIcon(playButton, BootstrapIcons.PLAY_FILL);
+                centerPlayButton.setVisible(true);
                 showControls();
             });
         }
@@ -594,7 +739,12 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
 
         @Override
         public void finished(MediaPlayer mediaPlayer) {
-            SwingUtilities.invokeLater(SessionPlayerPanel.this::playNextSegment);
+            SwingUtilities.invokeLater(() -> {
+                playNextSegment();
+                if (!playerComponent.mediaPlayer().status().isPlaying()) {
+                    centerPlayButton.setVisible(true);
+                }
+            });
         }
 
         @Override
@@ -602,6 +752,7 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
             SwingUtilities.invokeLater(() -> {
                 noticeLabel.setText("播放失败，详情见日志");
                 setButtonIcon(playButton, BootstrapIcons.PLAY_FILL);
+                centerPlayButton.setVisible(true);
                 showControls();
                 AppLog.get(SessionPlayerPanel.class).warning("VLC playback failed");
             });
