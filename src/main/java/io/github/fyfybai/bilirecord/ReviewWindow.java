@@ -203,6 +203,12 @@ final class ReviewWindow {
         UiTheme.accent(transcribeButton);
         transcribeButton.setEnabled(summary.endedAt() != null);
         transcribeButton.addActionListener(event -> toggleTranscription());
+        int actionWidth = Math.max(
+                transcribeButton.getPreferredSize().width,
+                exportButton.getPreferredSize().width);
+        Dimension actionSize = new Dimension(actionWidth, 32);
+        transcribeButton.setPreferredSize(actionSize);
+        exportButton.setPreferredSize(actionSize);
         JPanel transcriptionRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 7, 0));
         transcriptionRow.setOpaque(false);
         transcriptionRow.add(modelChoice);
@@ -210,7 +216,7 @@ final class ReviewWindow {
         transcriptionRow.add(languageChoice);
         transcriptionRow.add(transcribeButton);
         asr.add(transcriptionRow, BorderLayout.NORTH);
-        JPanel exportRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        JPanel exportRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 7, 0));
         exportRow.setOpaque(false);
         exportRow.add(exportButton);
         asr.add(exportRow, BorderLayout.SOUTH);
