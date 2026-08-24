@@ -2,6 +2,8 @@ package io.github.fyfybai.bilirecord;
 
 import javax.swing.JSlider;
 import java.awt.Color;
+import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -12,6 +14,8 @@ import java.util.List;
 
 final class TimelineSlider extends JSlider {
     private boolean hovered;
+    private int previewX;
+    private long previewMillis = -1;
 
     TimelineSlider() {
         setMinimum(0);
@@ -21,21 +25,27 @@ final class TimelineSlider extends JSlider {
         addMouseMotionListener(new MouseMotionAdapter() {
             @Override
             public void mouseMoved(MouseEvent event) {
-                double ratio = Math.max(0, Math.min(1,
-                        event.getX() / (double) Math.max(1, getWidth() - 1)));
-                setToolTipText(formatTime(Math.round(ratio * getMaximum())));
+                showPreviewAt(event.getX());
+            }
+
+            @Override
+            public void mouseDragged(MouseEvent event) {
+                showPreviewAt(event.getX());
             }
         });
         addMouseListener(new MouseAdapter() {
             @Override
             public void mouseEntered(MouseEvent event) {
                 hovered = true;
-                repaint();
+                showPreviewAt(event.getX());
             }
 
             @Override
             public void mouseExited(MouseEvent event) {
                 hovered = false;
+                if (!getValueIsAdjusting()) {
+                    previewMillis = -1;
+                }
                 repaint();
             }
         });
@@ -45,12 +55,25 @@ final class TimelineSlider extends JSlider {
         setMaximum((int) Math.max(1, Math.min(Integer.MAX_VALUE, durationMs)));
     }
 
+    void showPreviewAt(int x) {
+        previewX = Math.max(0, Math.min(Math.max(0, getWidth() - 1), x));
+        double ratio = previewX / (double) Math.max(1, getWidth() - 1);
+        previewMillis = Math.round(ratio * getMaximum());
+        setToolTipText(formatTime(previewMillis));
+        repaint();
+    }
+
+    void hidePreview() {
+        previewMillis = -1;
+        repaint();
+    }
+
     @Override
     protected void paintComponent(Graphics graphics) {
         Graphics2D copy = (Graphics2D) graphics.create();
         copy.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         int width = getWidth();
-        int y = getHeight() / 2;
+        int y = Math.max(2, getHeight() - 6);
         int trackHeight = 3;
         int progressWidth = (int) Math.round(
                 width * ((getValue() - getMinimum()) / (double) Math.max(1, getMaximum() - getMinimum())));
@@ -63,7 +86,28 @@ final class TimelineSlider extends JSlider {
             int x = Math.max(0, Math.min(width - 1, progressWidth));
             copy.fillOval(x - thumb / 2, y - thumb / 2, thumb, thumb);
         }
+        if ((hovered || getValueIsAdjusting()) && previewMillis >= 0) {
+            paintPreview(copy, width);
+        }
         copy.dispose();
+    }
+
+    private void paintPreview(Graphics2D graphics, int width) {
+        String text = formatTime(previewMillis);
+        Font font = getFont().deriveFont(Font.BOLD, 11f);
+        graphics.setFont(font);
+        FontMetrics metrics = graphics.getFontMetrics(font);
+        int bubbleWidth = metrics.stringWidth(text) + 14;
+        int bubbleHeight = 20;
+        int bubbleX = Math.max(2, Math.min(width - bubbleWidth - 2,
+                previewX - bubbleWidth / 2));
+        int bubbleY = 1;
+        graphics.setColor(new Color(15, 15, 15, 220));
+        graphics.fillRoundRect(bubbleX, bubbleY, bubbleWidth, bubbleHeight, 6, 6);
+        graphics.setColor(Color.WHITE);
+        graphics.drawString(text,
+                bubbleX + (bubbleWidth - metrics.stringWidth(text)) / 2,
+                bubbleY + (bubbleHeight - metrics.getHeight()) / 2 + metrics.getAscent());
     }
 
     private static String formatTime(long millis) {

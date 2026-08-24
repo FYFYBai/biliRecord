@@ -1,6 +1,7 @@
 package io.github.fyfybai.bilirecord;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ThreadLocalRandom;
@@ -13,13 +14,23 @@ public final class AutoRecorder {
     private static final Logger LOG = AppLog.get(AutoRecorder.class);
 
     private final BiliHttpClient roomClient;
+    private final Path recordingsDirectory;
 
     public AutoRecorder() {
-        this(new BiliHttpClient());
+        this(new BiliHttpClient(), Path.of("recordings"));
+    }
+
+    public AutoRecorder(Path recordingsDirectory) {
+        this(new BiliHttpClient(), recordingsDirectory);
     }
 
     AutoRecorder(BiliHttpClient roomClient) {
+        this(roomClient, Path.of("recordings"));
+    }
+
+    AutoRecorder(BiliHttpClient roomClient, Path recordingsDirectory) {
         this.roomClient = roomClient;
+        this.recordingsDirectory = recordingsDirectory.toAbsolutePath().normalize();
     }
 
     public void run(long roomId) throws IOException, InterruptedException {
@@ -49,7 +60,8 @@ public final class AutoRecorder {
                         Instant.now(), room.roomId(), lifecycle.state(), room.title()));
                 if (action == LifecycleAction.START) {
                     try {
-                        LiveRecordingSession session = LiveRecordingSession.start(room, observer);
+                        LiveRecordingSession session = LiveRecordingSession.start(
+                                room, recordingsDirectory, observer);
                         currentSession.set(session);
                         lifecycle.recordingStarted();
                         recoveryBackoff.reset();

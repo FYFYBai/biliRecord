@@ -5,6 +5,7 @@ import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JFrame;
+import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -41,6 +42,8 @@ public final class RecorderWindow {
     private static final Logger LOG = AppLog.get(RecorderWindow.class);
     private static final long DISK_WARNING_BYTES = 5L * 1024 * 1024 * 1024;
     private static final long DISK_CRITICAL_BYTES = 1024L * 1024 * 1024;
+    private static final Path DEFAULT_RECORDINGS_DIRECTORY = Path.of("recordings")
+            .toAbsolutePath().normalize();
 
     private final JFrame frame = new JFrame(UiTheme.APP_NAME);
     private final JTextField roomField = new JTextField();
@@ -61,9 +64,10 @@ public final class RecorderWindow {
     private final JTable sessionTable = table(sessionModel);
     private final JButton reviewSessionButton = new JButton("回看");
     private final JButton deleteSessionButton = new JButton("删除");
+    private final JTextField recordingDirectoryField = new JTextField();
+    private final JButton chooseRecordingDirectoryButton = new JButton("选择位置");
     private final JTextArea logArea = new JTextArea();
     private final DesktopSettingsStore settingsStore = new DesktopSettingsStore();
-    private final SessionCatalog sessionCatalog = new SessionCatalog();
     private final FloatingNotice floatingNotice = new FloatingNotice(frame);
     private final AtomicBoolean storageReadRunning = new AtomicBoolean();
     private final AtomicBoolean sessionReadRunning = new AtomicBoolean();
@@ -73,6 +77,7 @@ public final class RecorderWindow {
     private Timer uiTimer;
     private volatile Thread monitorWorker;
     private volatile Path activeSession;
+    private volatile Path recordingsDirectory = DEFAULT_RECORDINGS_DIRECTORY;
     private volatile Instant recordingStartedAt;
     private boolean diskWarningShown;
     private boolean diskCriticalShown;
@@ -290,7 +295,28 @@ public final class RecorderWindow {
         header.setOpaque(false);
         header.add(title, BorderLayout.WEST);
         header.add(actions, BorderLayout.EAST);
-        panel.add(header, BorderLayout.NORTH);
+
+        JLabel locationLabel = new JLabel("录制保存位置");
+        locationLabel.setForeground(UiTheme.MUTED);
+        recordingDirectoryField.setEditable(false);
+        recordingDirectoryField.setText(recordingsDirectory.toString());
+        recordingDirectoryField.setToolTipText(recordingsDirectory.toString());
+        recordingDirectoryField.setPreferredSize(new Dimension(10, 34));
+        UiTheme.outline(chooseRecordingDirectoryButton);
+        chooseRecordingDirectoryButton.addActionListener(event -> chooseRecordingDirectory());
+        JPanel location = new JPanel(new BorderLayout(10, 0));
+        location.setOpaque(false);
+        location.add(locationLabel, BorderLayout.WEST);
+        location.add(recordingDirectoryField, BorderLayout.CENTER);
+        location.add(chooseRecordingDirectoryButton, BorderLayout.EAST);
+
+        JPanel top = new JPanel();
+        top.setOpaque(false);
+        top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
+        top.add(header);
+        top.add(Box.createVerticalStrut(10));
+        top.add(location);
+        panel.add(top, BorderLayout.NORTH);
         panel.add(new JScrollPane(sessionTable), BorderLayout.CENTER);
         return panel;
     }
@@ -343,6 +369,7 @@ public final class RecorderWindow {
         diskWarningShown = false;
         diskCriticalShown = false;
         roomField.setEditable(false);
+        chooseRecordingDirectoryButton.setEnabled(false);
         monitorButton.setText("停止监控");
         UiTheme.outline(monitorButton);
         notifier.setMonitoring(true);
@@ -350,9 +377,10 @@ public final class RecorderWindow {
         LOG.info(() -> "Monitoring requested for room " + roomId);
 
         RecordingObserver observer = createObserver();
+        Path targetDirectory = recordingsDirectory;
         Thread worker = Thread.ofVirtual().name("auto-recorder").unstarted(() -> {
             try {
-                new AutoRecorder().run(roomId, observer);
+                new AutoRecorder(targetDirectory).run(roomId, observer);
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 LOG.info("Monitoring stopped by user");
@@ -450,6 +478,7 @@ public final class RecorderWindow {
         activeSession = null;
         recordingStartedAt = null;
         roomField.setEditable(true);
+        chooseRecordingDirectoryButton.setEnabled(true);
         monitorButton.setEnabled(true);
         monitorButton.setText("开始监控");
         UiTheme.accent(monitorButton);
@@ -515,16 +544,59 @@ public final class RecorderWindow {
         if (!sessionReadRunning.compareAndSet(false, true)) {
             return;
         }
+        Path directory = recordingsDirectory;
         Thread.ofVirtual().start(() -> {
             try {
-                List<SessionSummary> sessions = sessionCatalog.recent(100);
-                SwingUtilities.invokeLater(() -> updateSessions(sessions));
+                List<SessionSummary> sessions = new SessionCatalog(directory).recent(100);
+                SwingUtilities.invokeLater(() -> {
+                    if (directory.equals(recordingsDirectory)) {
+                        updateSessions(sessions);
+                    }
+                });
             } catch (IOException exception) {
                 LOG.log(Level.WARNING, "Could not load local sessions", exception);
             } finally {
                 sessionReadRunning.set(false);
+                if (!directory.equals(recordingsDirectory)) {
+                    SwingUtilities.invokeLater(this::refreshSessions);
+                }
             }
         });
+    }
+
+    private void chooseRecordingDirectory() {
+        if (monitorWorker != null) {
+            floatingNotice.show("监控运行中", "停止监控后可以更改录制保存位置");
+            return;
+        }
+        JFileChooser chooser = new JFileChooser(recordingsDirectory.toFile());
+        chooser.setDialogTitle("选择录制保存位置");
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        chooser.setAcceptAllFileFilterUsed(false);
+        chooser.setSelectedFile(recordingsDirectory.toFile());
+        if (chooser.showOpenDialog(frame) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+        Path selected = chooser.getSelectedFile().toPath().toAbsolutePath().normalize();
+        try {
+            Files.createDirectories(selected);
+            if (!Files.isDirectory(selected) || !Files.isWritable(selected)) {
+                throw new IOException("所选目录不可写");
+            }
+            settingsStore.saveRecordingDirectory(selected.toString());
+        } catch (IOException exception) {
+            LOG.log(Level.WARNING, "Could not change recording directory", exception);
+            floatingNotice.show("无法设置录制位置", exception.getMessage());
+            return;
+        }
+        recordingsDirectory = selected;
+        recordingDirectoryField.setText(selected.toString());
+        recordingDirectoryField.setToolTipText(selected.toString());
+        recordingDirectoryField.setCaretPosition(0);
+        diskWarningShown = false;
+        diskCriticalShown = false;
+        refreshSessions();
+        floatingNotice.show("录制位置已更新", "新的录制将保存到所选目录");
     }
 
     private void updateSessions(List<SessionSummary> sessions) {
@@ -653,8 +725,16 @@ public final class RecorderWindow {
 
     private void loadSettings() {
         try {
-            roomField.setText(settingsStore.load().room());
-        } catch (IOException exception) {
+            DesktopSettings settings = settingsStore.load();
+            roomField.setText(settings.room());
+            Path directory = settings.recordingDirectory().isBlank()
+                    ? DEFAULT_RECORDINGS_DIRECTORY
+                    : Path.of(settings.recordingDirectory()).toAbsolutePath().normalize();
+            recordingsDirectory = directory;
+            recordingDirectoryField.setText(directory.toString());
+            recordingDirectoryField.setToolTipText(directory.toString());
+            recordingDirectoryField.setCaretPosition(0);
+        } catch (IOException | RuntimeException exception) {
             LOG.log(Level.WARNING, "Could not load desktop settings", exception);
         }
     }

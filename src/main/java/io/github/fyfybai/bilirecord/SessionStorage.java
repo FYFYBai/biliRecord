@@ -70,10 +70,14 @@ public final class SessionStorage implements AutoCloseable {
     }
 
     public static SessionStorage create(RoomInfo room, SessionClock clock) throws IOException {
-        Path directory = Path.of(
-                "recordings",
-                "room_" + room.roomId(),
-                DIRECTORY_TIME.format(LocalDateTime.now()));
+        return create(room, clock, Path.of("recordings"));
+    }
+
+    static SessionStorage create(RoomInfo room, SessionClock clock, Path recordingsDirectory)
+            throws IOException {
+        Path directory = recordingsDirectory
+                .resolve("room_" + room.roomId())
+                .resolve(DIRECTORY_TIME.format(LocalDateTime.now()));
         return new SessionStorage(directory, room, clock);
     }
 

@@ -20,10 +20,11 @@ an internet connection.
 - Monitor a room number or Bilibili Live URL and remember the selected room.
 - Log in or switch accounts through Bilibili QR login without requesting a password.
 - Automatically record live sessions to timeline-aligned 30-minute MKV segments.
+- Choose and remember the recording directory from the recording history view.
 - Recover from API, danmaku, CDN, FFmpeg and stalled-stream failures.
 - Capture live start/stop, danmaku, room changes, gifts, Super Chat and guard purchases.
-- Play all recording segments on one continuous timeline with seeking, volume,
-  fullscreen playback, playback speed and search-to-seek.
+- Play all recording segments on one continuous timeline with drag-time preview,
+  15-second arrow-key seeking, volume, fullscreen, playback speed and search-to-seek.
 - Generate and replace a local faster-whisper transcript, then search it beside
   other session events.
 - Export a selected range across recording segments as MP4, MKV or WebM and

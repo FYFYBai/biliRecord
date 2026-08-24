@@ -46,8 +46,16 @@ public final class LiveRecordingSession implements AutoCloseable {
 
     public static LiveRecordingSession start(RoomInfo room, RecordingObserver observer)
             throws IOException, InterruptedException {
+        return start(room, Path.of("recordings"), observer);
+    }
+
+    static LiveRecordingSession start(
+            RoomInfo room,
+            Path recordingsDirectory,
+            RecordingObserver observer)
+            throws IOException, InterruptedException {
         SessionClock clock = SessionClock.start();
-        SessionStorage storage = SessionStorage.create(room, clock);
+        SessionStorage storage = SessionStorage.create(room, clock, recordingsDirectory);
         LiveRecordingSession session = new LiveRecordingSession(room, clock, storage, observer);
         try {
             session.startNextSegment();

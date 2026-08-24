@@ -46,7 +46,7 @@ import java.util.function.Consumer;
 
 final class SessionPlayerPanel extends JPanel implements AutoCloseable {
     private static final int CONTROL_HEIGHT = 92;
-    private static final long SEEK_STEP_MS = 5_000;
+    private static final long SEEK_STEP_MS = 15_000;
 
     private final SessionTimeline timeline;
     private final CallbackMediaPlayerComponent playerComponent;
@@ -153,9 +153,10 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
         panel.setBorder(BorderFactory.createEmptyBorder(2, 0, 7, 0));
 
         slider.setOpaque(false);
+        slider.setFocusable(false);
         slider.setAlignmentX(Component.LEFT_ALIGNMENT);
-        slider.setPreferredSize(new Dimension(10, 28));
-        slider.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+        slider.setPreferredSize(new Dimension(10, 34));
+        slider.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
         slider.addChangeListener(event -> {
             if (updatingSlider) {
                 return;
@@ -169,7 +170,25 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
             @Override
             public void mousePressed(MouseEvent event) {
                 if (SwingUtilities.isLeftMouseButton(event)) {
-                    seekFromSliderPoint(event.getX());
+                    slider.setValueIsAdjusting(true);
+                    updateSliderDrag(event.getX());
+                }
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent event) {
+                if (SwingUtilities.isLeftMouseButton(event)) {
+                    updateSliderDrag(event.getX());
+                    slider.setValueIsAdjusting(false);
+                    slider.hidePreview();
+                }
+            }
+        });
+        slider.addMouseMotionListener(new MouseMotionAdapter() {
+            @Override
+            public void mouseDragged(MouseEvent event) {
+                if ((event.getModifiersEx() & MouseEvent.BUTTON1_DOWN_MASK) != 0) {
+                    updateSliderDrag(event.getX());
                 }
             }
         });
@@ -224,6 +243,7 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
 
         volumeSlider.setOrientation(SwingConstants.VERTICAL);
         volumeSlider.setOpaque(false);
+        volumeSlider.setFocusable(false);
         volumeSlider.setPreferredSize(new Dimension(28, 92));
         volumeSlider.setToolTipText("音量");
         volumeSlider.putClientProperty("FlatLaf.style",
@@ -307,6 +327,7 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
                 ? " "
                 : "该时间点没有录像，已跳到相邻分段");
         showControls();
+        updateDisplayedPosition(offsetMs);
         playSegment(segment, offsetMs - segment.startedOffsetMs());
     }
 
@@ -439,9 +460,14 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
     }
 
     private void updatePosition(long localTimeMs) {
-        currentOffsetMs = currentSegment == null
+        long offsetMs = currentSegment == null
                 ? 0
                 : Math.min(timeline.durationMs(), currentSegment.startedOffsetMs() + localTimeMs);
+        updateDisplayedPosition(offsetMs);
+    }
+
+    private void updateDisplayedPosition(long offsetMs) {
+        currentOffsetMs = Math.max(0, Math.min(timeline.durationMs(), offsetMs));
         if (!sliderChanging) {
             updatingSlider = true;
             slider.setValue((int) Math.min(Integer.MAX_VALUE, currentOffsetMs));
@@ -451,14 +477,15 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
         positionListener.accept(currentOffsetMs);
     }
 
-    private void seekFromSliderPoint(int x) {
+    private void updateSliderDrag(int x) {
         double ratio = Math.max(0, Math.min(1,
                 x / (double) Math.max(1, slider.getWidth() - 1)));
         int value = (int) Math.round(ratio * slider.getMaximum());
+        slider.showPreviewAt(x);
         updatingSlider = true;
         slider.setValue(value);
         updatingSlider = false;
-        seekTo(value);
+        timeLabel.setText(formatTime(value) + " / " + formatTime(timeline.durationMs()));
     }
 
     private void configureMouseBehavior() {

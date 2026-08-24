@@ -27,7 +27,7 @@ final class DesktopSettingsStore {
         synchronized (FILE_LOCK) {
             return Files.exists(path)
                     ? objectMapper.readValue(path.toFile(), DesktopSettings.class)
-                    : new DesktopSettings("", "");
+                    : new DesktopSettings("", "", "");
         }
     }
 
@@ -41,14 +41,24 @@ final class DesktopSettingsStore {
     void saveRoom(String room) throws IOException {
         synchronized (FILE_LOCK) {
             DesktopSettings current = load();
-            save(new DesktopSettings(room, current.exportDirectory()));
+            save(new DesktopSettings(
+                    room, current.exportDirectory(), current.recordingDirectory()));
         }
     }
 
     void saveExportDirectory(String exportDirectory) throws IOException {
         synchronized (FILE_LOCK) {
             DesktopSettings current = load();
-            save(new DesktopSettings(current.room(), exportDirectory));
+            save(new DesktopSettings(
+                    current.room(), exportDirectory, current.recordingDirectory()));
+        }
+    }
+
+    void saveRecordingDirectory(String recordingDirectory) throws IOException {
+        synchronized (FILE_LOCK) {
+            DesktopSettings current = load();
+            save(new DesktopSettings(
+                    current.room(), current.exportDirectory(), recordingDirectory));
         }
     }
 }
