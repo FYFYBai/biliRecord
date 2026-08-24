@@ -43,8 +43,8 @@ the type selector narrows the same combined timeline.
 
 Select **导出片段** to open a separate time-range form. Start and end values
 can be entered as hours, minutes and seconds or copied from the current player
-position. The app confirms the range and destination before exporting an MP4;
-recording gaps inside the selection are omitted from the output.
+position. The app confirms the range and destination before exporting MP4,
+MKV or WebM; recording gaps inside the selection are omitted from the output.
 
 The review window can generate a local transcript with `faster-whisper`.
 Choose a model, CPU or CUDA, and a language, then select **生成转录**. On first

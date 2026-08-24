@@ -16,6 +16,7 @@ final class ClipExporter {
             long startMs,
             long endMs,
             Path output,
+            Format format,
             Progress progress) throws IOException, InterruptedException {
         List<Part> parts = parts(timeline, startMs, endMs);
         if (parts.isEmpty()) {
@@ -30,7 +31,7 @@ final class ClipExporter {
         long mediaDurationMs = parts.stream().mapToLong(Part::durationMs).sum();
         try {
             writeConcatFile(concatFile, parts);
-            runFfmpeg(concatFile, absoluteOutput, mediaDurationMs, progress);
+            runFfmpeg(concatFile, absoluteOutput, mediaDurationMs, format, progress);
             return new Result(absoluteOutput, mediaDurationMs, parts.size());
         } finally {
             Files.deleteIfExists(concatFile);
@@ -69,8 +70,9 @@ final class ClipExporter {
             Path concatFile,
             Path output,
             long durationMs,
+            Format format,
             Progress progress) throws IOException, InterruptedException {
-        List<String> command = List.of(
+        List<String> command = new ArrayList<>(List.of(
                 "ffmpeg",
                 "-hide_banner",
                 "-loglevel", "error",
@@ -80,16 +82,12 @@ final class ClipExporter {
                 "-safe", "0",
                 "-i", concatFile.toString(),
                 "-vf", "select=concatdec_select,setpts=PTS-STARTPTS",
-                "-af", "aselect=concatdec_select,asetpts=PTS-STARTPTS",
-                "-c:v", "libx264",
-                "-preset", "veryfast",
-                "-crf", "20",
-                "-c:a", "aac",
-                "-b:a", "192k",
-                "-movflags", "+faststart",
+                "-af", "aselect=concatdec_select,asetpts=PTS-STARTPTS"));
+        command.addAll(format.ffmpegArguments());
+        command.addAll(List.of(
                 "-progress", "pipe:1",
                 "-nostats",
-                output.toString());
+                output.toString()));
         Process process = new ProcessBuilder(command)
                 .redirectErrorStream(true)
                 .start();
@@ -140,6 +138,41 @@ final class ClipExporter {
     }
 
     record Result(Path output, long durationMs, int parts) {
+    }
+
+    enum Format {
+        MP4("MP4", "mp4", List.of(
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+                "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart")),
+        MKV("MKV", "mkv", List.of(
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+                "-c:a", "aac", "-b:a", "192k")),
+        WEBM("WebM", "webm", List.of(
+                "-c:v", "libvpx-vp9", "-deadline", "good", "-cpu-used", "4",
+                "-crf", "30", "-b:v", "0", "-c:a", "libopus", "-b:a", "160k"));
+
+        private final String label;
+        private final String extension;
+        private final List<String> ffmpegArguments;
+
+        Format(String label, String extension, List<String> ffmpegArguments) {
+            this.label = label;
+            this.extension = extension;
+            this.ffmpegArguments = ffmpegArguments;
+        }
+
+        String extension() {
+            return extension;
+        }
+
+        List<String> ffmpegArguments() {
+            return ffmpegArguments;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
     }
 
     @FunctionalInterface

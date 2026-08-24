@@ -1,8 +1,6 @@
 package io.github.fyfybai.bilirecord;
 
 import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
@@ -192,7 +190,7 @@ final class ReviewWindow {
         identity.add(details);
         header.add(identity, BorderLayout.CENTER);
 
-        JPanel asr = new JPanel(new FlowLayout(FlowLayout.RIGHT, 7, 0));
+        JPanel asr = new JPanel(new BorderLayout(0, 6));
         asr.setOpaque(false);
         modelChoice.setToolTipText("本地语音识别模型");
         deviceChoice.setToolTipText("推理设备");
@@ -205,18 +203,17 @@ final class ReviewWindow {
         UiTheme.accent(transcribeButton);
         transcribeButton.setEnabled(summary.endedAt() != null);
         transcribeButton.addActionListener(event -> toggleTranscription());
-        asr.add(modelChoice);
-        asr.add(deviceChoice);
-        asr.add(languageChoice);
-        JPanel actions = new JPanel();
-        actions.setOpaque(false);
-        actions.setLayout(new BoxLayout(actions, BoxLayout.Y_AXIS));
-        transcribeButton.setAlignmentX(JButton.RIGHT_ALIGNMENT);
-        exportButton.setAlignmentX(JButton.RIGHT_ALIGNMENT);
-        actions.add(transcribeButton);
-        actions.add(Box.createVerticalStrut(6));
-        actions.add(exportButton);
-        asr.add(actions);
+        JPanel transcriptionRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 7, 0));
+        transcriptionRow.setOpaque(false);
+        transcriptionRow.add(modelChoice);
+        transcriptionRow.add(deviceChoice);
+        transcriptionRow.add(languageChoice);
+        transcriptionRow.add(transcribeButton);
+        asr.add(transcriptionRow, BorderLayout.NORTH);
+        JPanel exportRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        exportRow.setOpaque(false);
+        exportRow.add(exportButton);
+        asr.add(exportRow, BorderLayout.SOUTH);
         header.add(asr, BorderLayout.EAST);
         return header;
     }

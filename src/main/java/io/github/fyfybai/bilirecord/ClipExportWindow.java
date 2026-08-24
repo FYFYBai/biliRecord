@@ -4,6 +4,7 @@ import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -37,6 +38,8 @@ final class ClipExportWindow {
     private final JDialog dialog;
     private final TimeFields start = new TimeFields();
     private final TimeFields end = new TimeFields();
+    private final JComboBox<ClipExporter.Format> formatChoice =
+            new JComboBox<>(ClipExporter.Format.values());
     private final JTextField outputField = new JTextField();
     private final JButton chooseOutputButton = new JButton("选择位置");
     private final JButton exportButton = new JButton("确认导出");
@@ -61,8 +64,8 @@ final class ClipExportWindow {
     private void show() {
         dialog.setIconImage(UiTheme.brandIcon(32).getImage());
         dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
-        dialog.setMinimumSize(new Dimension(620, 390));
-        dialog.setSize(650, 420);
+        dialog.setMinimumSize(new Dimension(640, 470));
+        dialog.setSize(680, 500);
         dialog.setContentPane(buildContent());
         dialog.setLocationRelativeTo(dialog.getOwner());
         dialog.addWindowListener(new WindowAdapter() {
@@ -95,6 +98,17 @@ final class ClipExportWindow {
         times.setAlignmentX(JPanel.LEFT_ALIGNMENT);
         form.add(times);
         form.add(Box.createVerticalStrut(18));
+
+        JLabel formatLabel = new JLabel("导出格式");
+        formatLabel.setFont(formatLabel.getFont().deriveFont(Font.BOLD, 14f));
+        formatLabel.setAlignmentX(JPanel.LEFT_ALIGNMENT);
+        form.add(formatLabel);
+        form.add(Box.createVerticalStrut(7));
+        formatChoice.setMaximumSize(new Dimension(160, 32));
+        formatChoice.setAlignmentX(JPanel.LEFT_ALIGNMENT);
+        formatChoice.addActionListener(event -> updateOutputExtension());
+        form.add(formatChoice);
+        form.add(Box.createVerticalStrut(14));
 
         JLabel outputLabel = new JLabel("导出位置");
         outputLabel.setFont(outputLabel.getFont().deriveFont(Font.BOLD, 14f));
@@ -167,16 +181,18 @@ final class ClipExportWindow {
     }
 
     private void chooseOutput() {
-        Path current = Path.of(outputField.getText()).toAbsolutePath().normalize();
+        ClipExporter.Format format = selectedFormat();
+        Path current = withExtension(
+                Path.of(outputField.getText()).toAbsolutePath().normalize(), format);
         FileDialog chooser = new FileDialog(dialog, "设置导出位置", FileDialog.SAVE);
         chooser.setDirectory(current.getParent().toString());
         chooser.setFile(current.getFileName().toString());
         chooser.setFilenameFilter((directory, name) -> name.toLowerCase(java.util.Locale.ROOT)
-                .endsWith(".mp4"));
+                .endsWith("." + format.extension()));
         chooser.setVisible(true);
         if (chooser.getFile() != null) {
-            outputField.setText(withMp4Extension(
-                    Path.of(chooser.getDirectory(), chooser.getFile())).toString());
+            outputField.setText(withExtension(
+                    Path.of(chooser.getDirectory(), chooser.getFile()), format).toString());
         }
     }
 
@@ -191,7 +207,8 @@ final class ClipExportWindow {
             showValidation("终点不能超过录像总时长 " + formatTime(timeline.durationMs()));
             return;
         }
-        Path output = withMp4Extension(Path.of(outputField.getText()));
+        ClipExporter.Format format = selectedFormat();
+        Path output = withExtension(Path.of(outputField.getText()), format);
         outputField.setText(output.toString());
         var parts = ClipExporter.parts(timeline, startMs, endMs);
         if (parts.isEmpty()) {
@@ -200,11 +217,12 @@ final class ClipExportWindow {
         }
         long availableMs = parts.stream().mapToLong(ClipExporter.Part::durationMs).sum();
         String overwrite = java.nio.file.Files.exists(output) ? "\n该文件已存在，将被覆盖。" : "";
-        String message = "起点：%s\n终点：%s\n实际可导出：%s\n文件：%s%s"
+        String message = "起点：%s\n终点：%s\n实际可导出：%s\n格式：%s\n文件：%s%s"
                 .formatted(
                         formatTime(startMs),
                         formatTime(endMs),
                         formatTime(availableMs),
+                        format,
                         output.toAbsolutePath(),
                         overwrite);
         int choice = JOptionPane.showConfirmDialog(
@@ -216,10 +234,14 @@ final class ClipExportWindow {
         if (choice != JOptionPane.OK_OPTION) {
             return;
         }
-        beginExport(startMs, endMs, output);
+        beginExport(startMs, endMs, output, format);
     }
 
-    private void beginExport(long startMs, long endMs, Path output) {
+    private void beginExport(
+            long startMs,
+            long endMs,
+            Path output,
+            ClipExporter.Format format) {
         setExporting(true);
         status.setText("正在导出…");
         progress.setValue(0);
@@ -231,6 +253,7 @@ final class ClipExportWindow {
                         startMs,
                         endMs,
                         output,
+                        format,
                         fraction -> SwingUtilities.invokeLater(
                                 () -> progress.setValue((int) Math.round(fraction * 1000))));
                 SwingUtilities.invokeLater(() -> exportComplete(result));
@@ -273,6 +296,7 @@ final class ClipExportWindow {
         exporting = value;
         start.setEnabled(!value);
         end.setEnabled(!value);
+        formatChoice.setEnabled(!value);
         chooseOutputButton.setEnabled(!value);
         exportButton.setEnabled(!value);
     }
@@ -298,15 +322,26 @@ final class ClipExportWindow {
     }
 
     private Path defaultOutput() {
-        String name = "clip_%s-%s.mp4".formatted(
-                fileTime(0), fileTime(timeline.durationMs()));
+        ClipExporter.Format format = selectedFormat();
+        String name = "clip_%s-%s.%s".formatted(
+                fileTime(0), fileTime(timeline.durationMs()), format.extension());
         return timeline.summary().directory().resolve("exports").resolve(name).toAbsolutePath();
     }
 
-    private static Path withMp4Extension(Path path) {
-        return path.getFileName().toString().toLowerCase(java.util.Locale.ROOT).endsWith(".mp4")
-                ? path
-                : path.resolveSibling(path.getFileName() + ".mp4");
+    private void updateOutputExtension() {
+        outputField.setText(withExtension(
+                Path.of(outputField.getText()), selectedFormat()).toString());
+    }
+
+    private ClipExporter.Format selectedFormat() {
+        return (ClipExporter.Format) formatChoice.getSelectedItem();
+    }
+
+    private static Path withExtension(Path path, ClipExporter.Format format) {
+        String fileName = path.getFileName().toString();
+        int dot = fileName.lastIndexOf('.');
+        String base = dot > 0 ? fileName.substring(0, dot) : fileName;
+        return path.resolveSibling(base + "." + format.extension());
     }
 
     private static String fileTime(long millis) {
