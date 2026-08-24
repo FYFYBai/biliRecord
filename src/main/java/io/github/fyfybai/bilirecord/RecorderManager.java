@@ -13,6 +13,7 @@ import java.util.List;
 
 public final class RecorderManager {
     private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+    private static final Duration SEGMENT_DURATION = Duration.ofMinutes(30);
 
     public Path record(URI streamUrl, long roomId, Duration duration) throws IOException, InterruptedException {
         Path directory = Path.of("recordings", "room_" + roomId);
@@ -52,6 +53,9 @@ public final class RecorderManager {
             SessionClock clock) throws IOException {
         Files.createDirectories(output.toAbsolutePath().normalize().getParent());
         Files.createDirectories(logFile.toAbsolutePath().normalize().getParent());
+        Path outputPattern = segmentPattern(output);
+        Path segmentList = logFile.resolveSibling(
+                logFile.getFileName().toString().replace("-ffmpeg.log", "-segments.csv"));
         List<String> command = new ArrayList<>(List.of(
                 "ffmpeg",
                 "-y",
@@ -66,10 +70,29 @@ public final class RecorderManager {
                 "-map", "0:v:0",
                 "-map", "0:a?",
                 "-c", "copy",
-                output.toString()));
+                "-f", "segment",
+                "-segment_time", Long.toString(SEGMENT_DURATION.toSeconds()),
+                "-segment_list", segmentList.toString(),
+                "-segment_list_type", "csv",
+                "-reset_timestamps", "1",
+                outputPattern.toString()));
         Process process = new ProcessBuilder(command)
                 .redirectErrorStream(true)
                 .start();
-        return new RecordingHandle(process, clock, output, logFile);
+        return new RecordingHandle(process, clock, outputPattern, logFile, segmentList);
+    }
+
+    static Path segmentPattern(Path output) {
+        String filename = output.getFileName().toString();
+        int extension = filename.lastIndexOf('.');
+        String pattern = extension < 0
+                ? filename + "_%03d"
+                : filename.substring(0, extension) + "_%03d" + filename.substring(extension);
+        return output.resolveSibling(pattern);
+    }
+
+    static Path firstSegmentPath(Path output) {
+        Path pattern = segmentPattern(output);
+        return pattern.resolveSibling(pattern.getFileName().toString().formatted(0));
     }
 }

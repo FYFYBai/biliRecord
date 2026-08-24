@@ -11,7 +11,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class LiveRecordingSession implements AutoCloseable {
-    private static final Duration SEGMENT_DURATION = Duration.ofMinutes(30);
     private static final Duration RECORDING_STALL_TIMEOUT = Duration.ofSeconds(30);
     private static final Logger LOG = AppLog.get(LiveRecordingSession.class);
     private final RoomInfo room;
@@ -25,7 +24,9 @@ public final class LiveRecordingSession implements AutoCloseable {
     private RecordingHandle recorder;
     private DanmakuClient danmaku;
     private long segmentId;
+    private long recorderStartedOffsetMs;
     private long segmentStartedOffsetMs;
+    private int completedSegmentCount;
     private int segmentCount;
 
     private LiveRecordingSession(
@@ -70,18 +71,15 @@ public final class LiveRecordingSession implements AutoCloseable {
         if (closed.get()) {
             return null;
         }
+        syncCompletedSegments();
         String recovery = null;
-        boolean rotateSegment = recorder != null
-                && recorder.videoPositionMillis() >= SEGMENT_DURATION.toMillis();
         boolean stalled = recorder != null && recorder.isStalled(RECORDING_STALL_TIMEOUT);
-        if (recorder == null || !recorder.isAlive() || rotateSegment || stalled) {
+        if (recorder == null || !recorder.isAlive() || stalled) {
             finishCurrentSegment();
             startNextSegment();
-            recovery = rotateSegment
-                    ? "Started a scheduled 30-minute recording segment"
-                    : stalled
-                            ? "Recovered a stalled recording with a fresh stream URL and segment"
-                            : "Recovered recording with a fresh stream URL and segment";
+            recovery = stalled
+                    ? "Recovered a stalled recording with a fresh stream URL and segment"
+                    : "Recovered recording with a fresh stream URL and segment";
             LOG.info(recovery);
         }
         if (danmaku == null || !danmaku.isOpen()) {
@@ -137,8 +135,10 @@ public final class LiveRecordingSession implements AutoCloseable {
                 if (segmentCount == 0) {
                     storage.setVideoStartedAt(clock.videoStartedAt().orElseThrow());
                 }
-                segmentId = storage.startSegment(video, started.sessionOffsetMs());
+                segmentId = storage.startSegment(candidate.output(), started.sessionOffsetMs());
+                recorderStartedOffsetMs = started.sessionOffsetMs();
                 segmentStartedOffsetMs = started.sessionOffsetMs();
+                completedSegmentCount = 0;
                 recorder = candidate;
                 segmentCount++;
                 return;
@@ -158,7 +158,7 @@ public final class LiveRecordingSession implements AutoCloseable {
                 : Math.max(0, clock.currentOffsetMillis().orElse(0) / 1_000);
         String baseName = "%06d".formatted(offsetSeconds);
         Path candidate = videoDirectory.resolve(baseName + ".mkv");
-        for (int suffix = 2; Files.exists(candidate); suffix++) {
+        for (int suffix = 2; Files.exists(RecorderManager.firstSegmentPath(candidate)); suffix++) {
             candidate = videoDirectory.resolve(baseName + "_" + suffix + ".mkv");
         }
         return candidate;
@@ -169,11 +169,34 @@ public final class LiveRecordingSession implements AutoCloseable {
             return;
         }
         recorder.stop();
-        storage.finishSegment(
-                segmentId,
-                segmentStartedOffsetMs + recorder.videoPositionMillis());
+        syncCompletedSegments();
+        if (segmentId != 0) {
+            storage.finishSegment(
+                    segmentId,
+                    recorderStartedOffsetMs + recorder.videoPositionMillis());
+        }
         recorder = null;
         segmentId = 0;
+    }
+
+    private void syncCompletedSegments() throws IOException {
+        if (recorder == null) {
+            return;
+        }
+        List<RecordingSegment> completed = recorder.completedSegments();
+        while (completedSegmentCount < completed.size()) {
+            RecordingSegment segment = completed.get(completedSegmentCount);
+            storage.finishSegment(segmentId, recorderStartedOffsetMs + segment.endedMs());
+            segmentId = 0;
+            segmentStartedOffsetMs = recorderStartedOffsetMs + segment.endedMs();
+            completedSegmentCount++;
+            if (completedSegmentCount < completed.size() || recorder.isAlive()) {
+                segmentId = storage.startSegment(
+                        recorder.segmentPath(completedSegmentCount),
+                        segmentStartedOffsetMs);
+                segmentCount++;
+            }
+        }
     }
 
     private void connectDanmaku() throws IOException, InterruptedException {

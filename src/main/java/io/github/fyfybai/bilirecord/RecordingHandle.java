@@ -4,11 +4,14 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -19,14 +22,25 @@ public final class RecordingHandle implements AutoCloseable {
     private final Thread outputReader;
     private final CompletableFuture<RecordingStart> firstProgress = new CompletableFuture<>();
     private final SessionClock clock;
-    private final Path output;
+    private final Path outputPattern;
+    private final Path segmentList;
     private volatile Duration latestProgress = Duration.ZERO;
     private volatile long lastProgressAdvanceNanos = System.nanoTime();
 
     RecordingHandle(Process process, SessionClock clock, Path output, Path logFile) throws IOException {
+        this(process, clock, output, logFile, null);
+    }
+
+    RecordingHandle(
+            Process process,
+            SessionClock clock,
+            Path outputPattern,
+            Path logFile,
+            Path segmentList) throws IOException {
         this.process = process;
         this.clock = clock;
-        this.output = output;
+        this.outputPattern = outputPattern;
+        this.segmentList = segmentList;
         BufferedWriter log = Files.newBufferedWriter(logFile, StandardCharsets.UTF_8);
         outputReader = Thread.ofVirtual().name("ffmpeg-progress").start(() -> readOutput(log));
     }
@@ -42,7 +56,38 @@ public final class RecordingHandle implements AutoCloseable {
     }
 
     public Path output() {
-        return output.toAbsolutePath().normalize();
+        return segmentPath(0);
+    }
+
+    public Path segmentPath(int index) {
+        if (segmentList == null) {
+            return outputPattern.toAbsolutePath().normalize();
+        }
+        String filename = outputPattern.getFileName().toString().formatted(index);
+        return outputPattern.resolveSibling(filename).toAbsolutePath().normalize();
+    }
+
+    public List<RecordingSegment> completedSegments() throws IOException {
+        if (segmentList == null || !Files.exists(segmentList)) {
+            return List.of();
+        }
+        List<RecordingSegment> completed = new ArrayList<>();
+        for (String line : Files.readAllLines(segmentList, StandardCharsets.UTF_8)) {
+            int endedSeparator = line.lastIndexOf(',');
+            int startedSeparator = line.lastIndexOf(',', endedSeparator - 1);
+            if (startedSeparator < 0 || endedSeparator < 0) {
+                continue;
+            }
+            try {
+                long startedMs = secondsToMillis(line.substring(startedSeparator + 1, endedSeparator));
+                long endedMs = secondsToMillis(line.substring(endedSeparator + 1));
+                completed.add(new RecordingSegment(
+                        segmentPath(completed.size()), startedMs, endedMs));
+            } catch (NumberFormatException ignored) {
+                // FFmpeg may still be appending the final line while it is read.
+            }
+        }
+        return List.copyOf(completed);
     }
 
     public boolean isAlive() {
@@ -131,5 +176,9 @@ public final class RecordingHandle implements AutoCloseable {
         } catch (NumberFormatException ignored) {
             // A later progress record can still provide a numeric timestamp.
         }
+    }
+
+    private static long secondsToMillis(String value) {
+        return new BigDecimal(value).movePointRight(3).longValue();
     }
 }

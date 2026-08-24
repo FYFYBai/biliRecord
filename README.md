@@ -108,16 +108,18 @@ java -jar target/bili-record.jar 92613 --auto
 ```
 
 An automatic run writes one session directory containing video segments,
-per-segment FFmpeg logs, `timeline.sqlite` and `raw-events.jsonl`. Press Ctrl+C
-to finish the active session cleanly.
+FFmpeg process logs, `timeline.sqlite` and `raw-events.jsonl`. Press Ctrl+C to
+finish the active session cleanly.
 
 Temporary failures are recovered without ending the live session. Room API
 requests use a capped `1s, 2s, 5s, 10s, 30s` backoff. A closed danmaku socket
 gets a fresh host and token; an exited FFmpeg process gets a newly resolved
 stream URL and starts another timeline-aligned MKV segment. All CDN candidates
 for the selected stream variant are tried before the next backoff cycle.
-Healthy recordings rotate into a new MKV segment every 30 minutes so a long
-session does not depend on one very large file.
+For a healthy recording, one continuous FFmpeg process uses the segment muxer
+to start a new MKV at a keyframe roughly every 30 minutes. The input stream is
+not reconnected during a scheduled split, so the boundary does not intentionally
+drop media. A stalled stream still starts a fresh FFmpeg process and stream URL.
 
 ## Listen to danmaku
 
