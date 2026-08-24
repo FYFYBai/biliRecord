@@ -59,9 +59,9 @@ Get-VerifiedDownload `
 
 $vlcZip = Join-Path $cache "vlc-3.0.21-win64.zip"
 Get-VerifiedDownload `
-    -Url "https://get.videolan.org/vlc/3.0.21/win64/vlc-3.0.21-win64.zip" `
+    -Url "https://mirror.csclub.uwaterloo.ca/vlc/vlc/3.0.21/win64/vlc-3.0.21-win64.zip" `
     -Destination $vlcZip `
-    -Sha256 "899044c126b2a3a46dc26ad9a268037417a57fdcdb423f7215b448ee668708f8"
+    -Sha256 "a0b7ec02b50adf6417eed014fb8df50af39690505a4225b85b3dc2ed17d14843"
 
 $expanded = Join-Path $target "package-expanded"
 if (Test-Path -LiteralPath $expanded) {
