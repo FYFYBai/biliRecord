@@ -9,6 +9,8 @@ live session with its event timeline.
 - Java 21 or newer
 - Maven 3.9 or newer
 - FFmpeg and FFprobe 8 or newer (required from the recorder phase)
+- VLC 3.x, 64-bit (required for embedded playback)
+- Python 3.9 or newer (optional, required only for local speech recognition)
 
 ## Build
 
@@ -31,6 +33,21 @@ room ID, anchor UID, title, live state, elapsed recording time, session size and
 free disk space. QR login and account switching are available from the top bar.
 The selected room is remembered in the ignored local file
 `data/settings.json`.
+
+The **录制记录** tab opens a V2.1 review window for completed local sessions.
+It plays all MKV segments as one session timeline, preserves gaps caused by a
+real reconnect, and provides playback, seeking, volume and mute controls.
+Double-clicking a timeline row seeks to the matching moment. Search covers the
+visible normalized events, users, message text, gifts and speech transcript;
+the type selector narrows the same combined timeline.
+
+The review window can generate a local transcript with `faster-whisper`.
+Choose a model, CPU or CUDA, and a language, then select **生成转录**. On first
+use the app creates a private Python environment and downloads the chosen model
+under the ignored `data/asr/` directory. Audio, transcript rows and searchable
+text stay on this machine. Transcript rows are written to the session's
+`timeline.sqlite` and `transcript.jsonl`; regenerating replaces only those
+transcript rows.
 
 Closing or minimizing the window sends it to the Windows system tray. Native
 notifications report live start/stop, successful recovery, low disk space and
@@ -164,5 +181,8 @@ print `OFFLINE`.
 - [x] Phase 7: lifecycle
 - [x] Phase 8: recovery
 - [x] Phase 9: desktop UI and normalized event feed
+- [x] V2: embedded local playback, unified timeline and search-to-seek
+- [x] V2.1: local faster-whisper transcription and transcript search
 
-Authentication data and recordings are local-only and must not be committed.
+Authentication data, recordings, speech models, transcripts, test sources and
+build outputs are local-only and must not be committed.

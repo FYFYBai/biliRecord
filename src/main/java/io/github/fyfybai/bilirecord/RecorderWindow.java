@@ -59,6 +59,7 @@ public final class RecorderWindow {
     private final EventTableModel eventModel = new EventTableModel();
     private final SessionTableModel sessionModel = new SessionTableModel();
     private final JTable sessionTable = table(sessionModel);
+    private final JButton reviewSessionButton = new JButton("回看");
     private final JButton deleteSessionButton = new JButton("删除");
     private final JTextArea logArea = new JTextArea();
     private final DesktopSettingsStore settingsStore = new DesktopSettingsStore();
@@ -260,16 +261,31 @@ public final class RecorderWindow {
         JButton open = new JButton("打开文件夹");
         UiTheme.outline(open);
         open.addActionListener(event -> openSelectedSession());
+        UiTheme.accent(reviewSessionButton);
+        reviewSessionButton.setEnabled(false);
+        reviewSessionButton.addActionListener(event -> reviewSelectedSession());
         UiTheme.destructive(deleteSessionButton);
         deleteSessionButton.setEnabled(false);
         deleteSessionButton.addActionListener(event -> deleteSelectedSession());
-        sessionTable.getSelectionModel().addListSelectionListener(event ->
-                deleteSessionButton.setEnabled(sessionTable.getSelectedRow() >= 0));
+        sessionTable.getSelectionModel().addListSelectionListener(event -> {
+            boolean selected = sessionTable.getSelectedRow() >= 0;
+            reviewSessionButton.setEnabled(selected);
+            deleteSessionButton.setEnabled(selected);
+        });
+        sessionTable.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent event) {
+                if (event.getClickCount() == 2) {
+                    reviewSelectedSession();
+                }
+            }
+        });
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         actions.setOpaque(false);
         actions.add(refresh);
         actions.add(deleteSessionButton);
         actions.add(open);
+        actions.add(reviewSessionButton);
         JPanel header = new JPanel(new BorderLayout());
         header.setOpaque(false);
         header.add(title, BorderLayout.WEST);
@@ -502,13 +518,34 @@ public final class RecorderWindow {
         Thread.ofVirtual().start(() -> {
             try {
                 List<SessionSummary> sessions = sessionCatalog.recent(100);
-                SwingUtilities.invokeLater(() -> sessionModel.setSessions(sessions));
+                SwingUtilities.invokeLater(() -> updateSessions(sessions));
             } catch (IOException exception) {
                 LOG.log(Level.WARNING, "Could not load local sessions", exception);
             } finally {
                 sessionReadRunning.set(false);
             }
         });
+    }
+
+    private void updateSessions(List<SessionSummary> sessions) {
+        Path selectedDirectory = null;
+        int selected = sessionTable.getSelectedRow();
+        if (selected >= 0) {
+            selectedDirectory = sessionModel.get(sessionTable.convertRowIndexToModel(selected))
+                    .directory().toAbsolutePath().normalize();
+        }
+        sessionModel.setSessions(sessions);
+        if (selectedDirectory == null) {
+            return;
+        }
+        for (int modelRow = 0; modelRow < sessionModel.getRowCount(); modelRow++) {
+            Path directory = sessionModel.get(modelRow).directory().toAbsolutePath().normalize();
+            if (directory.equals(selectedDirectory)) {
+                int viewRow = sessionTable.convertRowIndexToView(modelRow);
+                sessionTable.setRowSelectionInterval(viewRow, viewRow);
+                break;
+            }
+        }
     }
 
     private void openSelectedSession() {
@@ -519,6 +556,16 @@ public final class RecorderWindow {
         }
         int modelRow = sessionTable.convertRowIndexToModel(selected);
         openPath(sessionModel.get(modelRow).directory());
+    }
+
+    private void reviewSelectedSession() {
+        int selected = sessionTable.getSelectedRow();
+        if (selected < 0) {
+            floatingNotice.show("尚未选择录制记录", "请先选择一条 Session，再进入回看");
+            return;
+        }
+        int modelRow = sessionTable.convertRowIndexToModel(selected);
+        ReviewWindow.open(sessionModel.get(modelRow), frame);
     }
 
     private void deleteSelectedSession() {

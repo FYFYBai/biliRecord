@@ -5,7 +5,9 @@
 *.iml
 
 /data/auth/
+/data/asr/
 /data/settings.json
+/.venv/
 /recordings/
 /logs/
 .env
