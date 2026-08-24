@@ -17,6 +17,7 @@ import java.sql.Statement;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.OptionalLong;
 
 public final class SessionStorage implements AutoCloseable {
@@ -208,6 +209,14 @@ public final class SessionStorage implements AutoCloseable {
             rawEvents.close();
         } catch (SQLException exception) {
             throw new IOException("Could not close session database", exception);
+        }
+    }
+
+    void deleteDirectory() throws IOException {
+        try (var paths = Files.walk(directory)) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(path);
+            }
         }
     }
 

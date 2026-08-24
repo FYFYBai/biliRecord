@@ -228,6 +228,9 @@ public final class LiveRecordingSession implements AutoCloseable {
     private void closeAfterFailure(Exception failure) {
         try {
             close();
+            if (segmentCount == 0) {
+                storage.deleteDirectory();
+            }
         } catch (Exception closeFailure) {
             failure.addSuppressed(closeFailure);
         }
