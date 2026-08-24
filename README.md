@@ -79,6 +79,19 @@ Recordings stay under the locally ignored `recordings/` directory. This phase
 records a requested duration; automatic start, stop, segmentation and recovery
 belong to the later lifecycle phases.
 
+## Listen to danmaku
+
+Connect to the live-room WebSocket, authenticate, send heartbeats and print
+`DANMU_MSG` events for a requested duration:
+
+```shell
+java -jar target/bili-record.jar 92613 --danmaku 30
+```
+
+The binary decoder supports normal packets, nested packets, zlib and Brotli.
+Other event packets are decoded but ignored by the CLI until the storage phase
+adds raw-event persistence.
+
 The one-shot command prints `LIVE` when `live_status` is `1`; other room states
 print `OFFLINE`.
 
@@ -88,7 +101,7 @@ print `OFFLINE`.
 - [x] Phase 2: stream resolver
 - [x] Authentication prerequisite: QR login and local storage
 - [x] Phase 3: recorder
-- [ ] Phase 4: danmaku client
+- [x] Phase 4: danmaku client
 - [ ] Phase 5: storage
 - [ ] Phase 6: session clock
 - [ ] Phase 7: lifecycle

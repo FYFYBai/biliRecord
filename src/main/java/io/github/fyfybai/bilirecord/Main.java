@@ -23,7 +23,7 @@ public final class Main {
 
         if (args.length < 1 || args.length > 3
                 || (args.length == 2 && !"--watch".equals(args[1]) && !"--streams".equals(args[1]))
-                || (args.length == 3 && !"--record".equals(args[1]))) {
+                || (args.length == 3 && !"--record".equals(args[1]) && !"--danmaku".equals(args[1]))) {
             printUsage();
             System.exit(2);
         }
@@ -31,7 +31,12 @@ public final class Main {
         try {
             long roomId = RoomIdParser.parse(args[0]);
             if (args.length == 3) {
-                record(roomId, parseDuration(args[2]));
+                Duration duration = parseDuration(args[2]);
+                if ("--record".equals(args[1])) {
+                    record(roomId, duration);
+                } else {
+                    listenDanmaku(roomId, duration);
+                }
                 return;
             }
             if (args.length == 2 && "--streams".equals(args[1])) {
@@ -120,10 +125,23 @@ public final class Main {
         throw new IllegalArgumentException("Recording duration must be a positive number of seconds");
     }
 
+    private static void listenDanmaku(long roomId, Duration duration)
+            throws IOException, InterruptedException {
+        DanmakuInfo info = new DanmakuInfoResolver().resolve(roomId);
+        try (DanmakuClient client = new DanmakuClient()) {
+            client.connect(info, message -> System.out.printf("[%s(%d)] %s%n",
+                    message.username(), message.uid(), message.text()));
+            System.out.printf("connected room=%d uid=%d server=%s%n",
+                    info.roomId(), info.uid(), info.servers().getFirst().getHost());
+            client.listen(duration);
+        }
+    }
+
     private static void printUsage() {
         System.err.println("Usage:");
         System.err.println("  java -jar bili-record.jar --login");
         System.err.println("  java -jar bili-record.jar <room-id-or-url> [--watch|--streams]");
         System.err.println("  java -jar bili-record.jar <room-id-or-url> --record <seconds>");
+        System.err.println("  java -jar bili-record.jar <room-id-or-url> --danmaku <seconds>");
     }
 }

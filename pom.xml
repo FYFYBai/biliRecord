@@ -15,6 +15,7 @@
         <jackson.version>2.18.3</jackson.version>
         <junit.version>5.12.1</junit.version>
         <zxing.version>3.5.3</zxing.version>
+        <brotli.version>0.1.2</brotli.version>
     </properties>
 
     <dependencies>
@@ -27,6 +28,11 @@
             <groupId>com.google.zxing</groupId>
             <artifactId>core</artifactId>
             <version>${zxing.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.brotli</groupId>
+            <artifactId>dec</artifactId>
+            <version>${brotli.version}</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

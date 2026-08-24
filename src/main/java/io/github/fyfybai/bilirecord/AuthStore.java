@@ -46,18 +46,27 @@ public final class AuthStore {
     }
 
     public Optional<String> loadCookieHeader() throws IOException {
-        if (!Files.exists(path)) {
+        StoredAuth auth = load();
+        if (auth == null) {
             return Optional.empty();
         }
-        StoredAuth auth = objectMapper.readValue(path.toFile(), StoredAuth.class);
         String header = auth.cookies().entrySet().stream()
                 .map(entry -> entry.getKey() + "=" + entry.getValue())
                 .collect(Collectors.joining("; "));
         return header.isBlank() ? Optional.empty() : Optional.of(header);
     }
 
+    public Optional<String> loadCookie(String name) throws IOException {
+        StoredAuth auth = load();
+        return auth == null ? Optional.empty() : Optional.ofNullable(auth.cookies().get(name));
+    }
+
     public Path path() {
         return path;
+    }
+
+    private StoredAuth load() throws IOException {
+        return Files.exists(path) ? objectMapper.readValue(path.toFile(), StoredAuth.class) : null;
     }
 
     private record StoredAuth(String updatedAt, String refreshToken, Map<String, String> cookies) {
