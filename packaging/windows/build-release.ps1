@@ -124,10 +124,15 @@ if ($LASTEXITCODE -ne 0) { throw "jpackage app-image failed" }
 
 $app = Join-Path $images $appName
 & (Join-Path $app "app\tools\ffmpeg\bin\ffmpeg.exe") -version | Select-Object -First 1
+if ($LASTEXITCODE -ne 0) { throw "Bundled FFmpeg smoke test failed" }
 & (Join-Path $app "app\tools\ffmpeg\bin\ffprobe.exe") -version | Select-Object -First 1
-& (Join-Path $app "app\tools\vlc\vlc.exe") --version | Select-Object -First 1
+if ($LASTEXITCODE -ne 0) { throw "Bundled FFprobe smoke test failed" }
+if (-not (Test-Path -LiteralPath (Join-Path $app "app\tools\vlc\libvlc.dll")) -or
+        -not (Test-Path -LiteralPath (Join-Path $app "app\tools\vlc\plugins"))) {
+    throw "Bundled VLC runtime is incomplete"
+}
 & (Join-Path $app "app\tools\python\python.exe") -c "import faster_whisper; print('faster-whisper ready')"
-if ($LASTEXITCODE -ne 0) { throw "Bundled runtime smoke test failed" }
+if ($LASTEXITCODE -ne 0) { throw "Bundled transcription runtime smoke test failed" }
 
 & jpackage `
     --type exe `
