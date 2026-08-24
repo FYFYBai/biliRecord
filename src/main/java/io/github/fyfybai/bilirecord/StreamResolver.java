@@ -21,18 +21,25 @@ public final class StreamResolver {
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final URI playInfoEndpoint;
+    private final AuthStore authStore;
 
     public StreamResolver() {
         this(HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .followRedirects(HttpClient.Redirect.NORMAL)
-                .build(), new ObjectMapper(), PLAY_INFO_ENDPOINT);
+                .build(), new ObjectMapper(), PLAY_INFO_ENDPOINT, new AuthStore());
     }
 
     StreamResolver(HttpClient httpClient, ObjectMapper objectMapper, URI playInfoEndpoint) {
+        this(httpClient, objectMapper, playInfoEndpoint, null);
+    }
+
+    private StreamResolver(HttpClient httpClient, ObjectMapper objectMapper, URI playInfoEndpoint,
+                           AuthStore authStore) {
         this.httpClient = httpClient;
         this.objectMapper = objectMapper;
         this.playInfoEndpoint = playInfoEndpoint;
+        this.authStore = authStore;
     }
 
     public PlayInfo resolve(long roomId) throws IOException, InterruptedException {
@@ -41,13 +48,16 @@ public final class StreamResolver {
                 + "&protocol=0,1&format=0,1,2&codec=0,1"
                 + "&qn=" + SOURCE_QUALITY
                 + "&platform=web&ptype=8");
-        HttpRequest request = HttpRequest.newBuilder(uri)
+        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(uri)
                 .timeout(Duration.ofSeconds(15))
                 .header("Accept", "application/json")
                 .header("Referer", "https://live.bilibili.com/" + roomId)
                 .header("User-Agent", "biliRecord/0.1")
-                .GET()
-                .build();
+                .GET();
+        if (authStore != null) {
+            authStore.loadCookieHeader().ifPresent(cookie -> requestBuilder.header("Cookie", cookie));
+        }
+        HttpRequest request = requestBuilder.build();
 
         HttpResponse<String> response = httpClient.send(request,
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));

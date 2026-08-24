@@ -15,6 +15,11 @@ public final class Main {
         System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
         System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8));
 
+        if (args.length == 1 && "--login".equals(args[0])) {
+            AuthLoginWindow.open(new AuthManager());
+            return;
+        }
+
         if (args.length < 1 || args.length > 2
                 || (args.length == 2 && !"--watch".equals(args[1]) && !"--streams".equals(args[1]))) {
             printUsage();
@@ -79,6 +84,8 @@ public final class Main {
     }
 
     private static void printUsage() {
-        System.err.println("Usage: java -jar bili-record.jar <room-id-or-url> [--watch|--streams]");
+        System.err.println("Usage:");
+        System.err.println("  java -jar bili-record.jar --login");
+        System.err.println("  java -jar bili-record.jar <room-id-or-url> [--watch|--streams]");
     }
 }

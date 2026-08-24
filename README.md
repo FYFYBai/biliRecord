@@ -7,6 +7,7 @@ and resolves available live stream variants.
 
 - Java 21 or newer
 - Maven 3.9 or newer
+- FFmpeg and FFprobe 8 or newer (required from the recorder phase)
 
 ## Build
 
@@ -43,6 +44,28 @@ CLI only prints CDN hostnames. API quality numbers are treated as platform
 quality tiers; reported dimensions will be independently checked with FFprobe
 in the recorder phase.
 
+## Authentication
+
+The production authentication flow uses Bilibili QR login. It never asks for a
+password and does not extract cookies from an existing browser profile.
+
+```shell
+java -jar target/bili-record.jar --login
+```
+
+The login window displays a QR code to scan and confirm with the Bilibili app.
+Cookies and the refresh token are saved only to the ignored local file
+`data/auth/cookies.json`. Authenticated API requests load that file without
+printing its contents. A future application UI will reuse this `AuthManager`
+flow as a login dialog and expose only login state, account identity and a
+logout command.
+
+The planned credential lifecycle is:
+
+```text
+QR login -> local auth file -> validity check -> refresh or re-login -> logout
+```
+
 The one-shot command prints `LIVE` when `live_status` is `1`; other room states
 print `OFFLINE`.
 
@@ -50,6 +73,7 @@ print `OFFLINE`.
 
 - [x] Phase 1: room monitor
 - [x] Phase 2: stream resolver
+- [x] Authentication prerequisite: QR login and local storage
 - [ ] Phase 3: recorder
 - [ ] Phase 4: danmaku client
 - [ ] Phase 5: storage
