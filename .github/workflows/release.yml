@@ -1,0 +1,72 @@
+name: Windows release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version without the v prefix
+        required: true
+        default: 2.1.0
+
+permissions:
+  contents: write
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Test and build application
+        shell: pwsh
+        run: mvn --batch-mode clean package
+
+      - name: Prepare bundled transcription runtime
+        shell: pwsh
+        run: python -m pip install --disable-pip-version-check faster-whisper==1.2.1
+
+      - name: Install WiX Toolset
+        shell: pwsh
+        run: choco install wixtoolset --no-progress -y
+
+      - name: Build self-contained installer
+        shell: pwsh
+        run: |
+          $pythonHome = python -c "import sys; print(sys.base_prefix)"
+          ./packaging/windows/build-release.ps1 -Version '${{ inputs.version }}' -PythonHome $pythonHome
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BaiChenRecorder-${{ inputs.version }}-windows
+          path: |
+            target/release/*.exe
+            target/release/*.sha256
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          $tag = "v$env:VERSION"
+          $assets = Get-ChildItem target/release -File | ForEach-Object FullName
+          $notes = @"
+          ## 白沉的录播小工具 $env:VERSION
+
+          Windows 自包含安装包。无需预先安装 Java、FFmpeg、VLC 或 Python。
+
+          首次生成转录时仍需联网下载用户选择的语音识别模型。
+          "@
+          $notes | Set-Content target/release-notes.md -Encoding utf8
+          gh release create $tag @assets --target $env:GITHUB_SHA --title "白沉的录播小工具 $env:VERSION" --notes-file target/release-notes.md

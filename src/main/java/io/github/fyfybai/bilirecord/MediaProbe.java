@@ -17,7 +17,7 @@ public final class MediaProbe {
 
     public MediaInfo probe(URI streamUrl, long roomId) throws IOException, InterruptedException {
         List<String> command = List.of(
-                "ffprobe",
+                BundledTools.ffprobe(),
                 "-v", "error",
                 "-user_agent", "biliRecord/0.1",
                 "-referer", "https://live.bilibili.com/" + roomId,

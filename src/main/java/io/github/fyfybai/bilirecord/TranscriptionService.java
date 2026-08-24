@@ -28,7 +28,7 @@ final class TranscriptionService {
     private volatile Process activeProcess;
 
     boolean isReady() {
-        return Files.isRegularFile(venvPython());
+        return BundledTools.python().isPresent() || Files.isRegularFile(venvPython());
     }
 
     Result transcribe(SessionTimeline timeline, Config config, Progress progress)
@@ -47,7 +47,7 @@ final class TranscriptionService {
         writeManifest(manifest, timeline, config.language());
 
         List<String> command = List.of(
-                venvPython().toString(),
+                transcriptionPython().toString(),
                 script.toString(),
                 "--manifest", manifest.toString(),
                 "--model", config.model(),
@@ -106,6 +106,9 @@ final class TranscriptionService {
     private void prepare(Progress progress) throws IOException, InterruptedException {
         Files.createDirectories(ROOT);
         extractScript();
+        if (BundledTools.python().isPresent()) {
+            return;
+        }
         if (!Files.isRegularFile(venvPython())) {
             progress.update(-1, "正在创建本地语音识别环境");
             List<String> python = findPython();
@@ -146,6 +149,7 @@ final class TranscriptionService {
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.environment().put("PYTHONIOENCODING", "utf-8");
         builder.environment().put("PYTHONUTF8", "1");
+        builder.environment().put("HF_HUB_DISABLE_SYMLINKS_WARNING", "1");
         builder.redirectErrorStream(mergeError);
         Process process = builder.start();
         activeProcess = process;
@@ -236,6 +240,10 @@ final class TranscriptionService {
         return Files.exists(windows)
                 ? windows
                 : ROOT.resolve("venv").resolve("bin").resolve("python");
+    }
+
+    private static Path transcriptionPython() {
+        return BundledTools.python().orElseGet(TranscriptionService::venvPython);
     }
 
     record Config(String model, String device, String computeType, String language) {

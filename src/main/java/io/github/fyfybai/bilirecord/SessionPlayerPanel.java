@@ -647,7 +647,8 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
     }
 
     private static void discoverVlc() {
-        Path windowsVlc = Path.of("C:\\Program Files\\VideoLAN\\VLC");
+        Path windowsVlc = BundledTools.vlcDirectory()
+                .orElse(Path.of("C:\\Program Files\\VideoLAN\\VLC"));
         if (Files.isRegularFile(windowsVlc.resolve("libvlc.dll"))) {
             String existing = System.getProperty("jna.library.path", "");
             if (!existing.contains(windowsVlc.toString())) {

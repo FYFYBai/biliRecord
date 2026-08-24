@@ -73,7 +73,7 @@ final class ClipExporter {
             Format format,
             Progress progress) throws IOException, InterruptedException {
         List<String> command = new ArrayList<>(List.of(
-                "ffmpeg",
+                BundledTools.ffmpeg(),
                 "-hide_banner",
                 "-loglevel", "error",
                 "-y",

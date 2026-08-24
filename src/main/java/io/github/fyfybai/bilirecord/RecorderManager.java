@@ -21,7 +21,7 @@ public final class RecorderManager {
         Path output = directory.resolve(FILE_TIME.format(LocalDateTime.now()) + ".mkv");
 
         List<String> command = new ArrayList<>(List.of(
-                "ffmpeg",
+                BundledTools.ffmpeg(),
                 "-y",
                 "-hide_banner",
                 "-loglevel", "warning",
@@ -57,7 +57,7 @@ public final class RecorderManager {
         Path segmentList = logFile.resolveSibling(
                 logFile.getFileName().toString().replace("-ffmpeg.log", "-segments.csv"));
         List<String> command = new ArrayList<>(List.of(
-                "ffmpeg",
+                BundledTools.ffmpeg(),
                 "-y",
                 "-hide_banner",
                 "-loglevel", "warning",
