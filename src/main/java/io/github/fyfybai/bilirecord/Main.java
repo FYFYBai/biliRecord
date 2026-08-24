@@ -128,11 +128,19 @@ public final class Main {
     private static void listenDanmaku(long roomId, Duration duration)
             throws IOException, InterruptedException {
         DanmakuInfo info = new DanmakuInfoResolver().resolve(roomId);
-        try (DanmakuClient client = new DanmakuClient()) {
-            client.connect(info, message -> System.out.printf("[%s(%d)] %s%n",
-                    message.username(), message.uid(), message.text()));
+        try (SessionStorage storage = SessionStorage.create(roomId);
+             DanmakuClient client = new DanmakuClient()) {
+            client.connect(info, event -> {
+                storage.append(event);
+                DanmakuMessage message = event.message();
+                if (message != null) {
+                    System.out.printf("[%s(%d)] %s%n",
+                            message.username(), message.uid(), message.text());
+                }
+            });
             System.out.printf("connected room=%d uid=%d server=%s%n",
                     info.roomId(), info.uid(), info.servers().getFirst().getHost());
+            System.out.println("session=" + storage.directory());
             client.listen(duration);
         }
     }

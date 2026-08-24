@@ -89,8 +89,19 @@ java -jar target/bili-record.jar 92613 --danmaku 30
 ```
 
 The binary decoder supports normal packets, nested packets, zlib and Brotli.
-Other event packets are decoded but ignored by the CLI until the storage phase
-adds raw-event persistence.
+Other event packets are persisted to JSONL but are not printed by the CLI.
+
+Each danmaku run now creates a local session directory:
+
+```text
+recordings/room_<room-id>/<timestamp>/
+├── timeline.sqlite
+└── raw-events.jsonl
+```
+
+Every decoded server event is written to JSONL with its receive timestamp.
+SQLite stores session metadata, the event index and parsed `DANMU_MSG` fields
+for later search and timeline work.
 
 The one-shot command prints `LIVE` when `live_status` is `1`; other room states
 print `OFFLINE`.
@@ -102,7 +113,7 @@ print `OFFLINE`.
 - [x] Authentication prerequisite: QR login and local storage
 - [x] Phase 3: recorder
 - [x] Phase 4: danmaku client
-- [ ] Phase 5: storage
+- [x] Phase 5: storage
 - [ ] Phase 6: session clock
 - [ ] Phase 7: lifecycle
 - [ ] Phase 8: recovery

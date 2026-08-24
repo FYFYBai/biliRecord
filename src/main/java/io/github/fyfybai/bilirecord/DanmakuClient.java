@@ -17,7 +17,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Consumer;
 
 public final class DanmakuClient implements WebSocket.Listener, AutoCloseable {
     private final HttpClient httpClient = HttpClient.newHttpClient();
@@ -30,15 +29,15 @@ public final class DanmakuClient implements WebSocket.Listener, AutoCloseable {
     private final CountDownLatch closed = new CountDownLatch(1);
 
     private DanmakuInfo info;
-    private Consumer<DanmakuMessage> messageConsumer;
+    private DanmakuEventHandler eventHandler;
     private WebSocket webSocket;
     private volatile Throwable failure;
     private volatile boolean closing;
 
-    public void connect(DanmakuInfo info, Consumer<DanmakuMessage> messageConsumer)
+    public void connect(DanmakuInfo info, DanmakuEventHandler eventHandler)
             throws IOException, InterruptedException {
         this.info = info;
-        this.messageConsumer = messageConsumer;
+        this.eventHandler = eventHandler;
         try {
             webSocket = httpClient.newWebSocketBuilder()
                     .connectTimeout(Duration.ofSeconds(10))
@@ -138,7 +137,7 @@ public final class DanmakuClient implements WebSocket.Listener, AutoCloseable {
                             new IOException("Bilibili rejected danmaku authentication with code " + code));
                 }
             } else if (packet.operation() == DanmakuPacketCodec.OP_MESSAGE) {
-                eventParser.parse(packet.payload()).ifPresent(messageConsumer);
+                eventHandler.handle(eventParser.parse(packet.payload()));
             }
         }
     }
