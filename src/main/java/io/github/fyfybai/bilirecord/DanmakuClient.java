@@ -92,6 +92,8 @@ public final class DanmakuClient implements WebSocket.Listener, AutoCloseable {
                 } catch (IOException exception) {
                     failure = exception;
                     authenticated.completeExceptionally(exception);
+                    heartbeatExecutor.shutdownNow();
+                    closed.countDown();
                     webSocket.abort();
                 }
             }
@@ -127,6 +129,15 @@ public final class DanmakuClient implements WebSocket.Listener, AutoCloseable {
                 Thread.currentThread().interrupt();
             }
         }
+    }
+
+    public boolean isOpen() {
+        WebSocket socket = webSocket;
+        return socket != null
+                && failure == null
+                && closed.getCount() != 0
+                && !socket.isInputClosed()
+                && !socket.isOutputClosed();
     }
 
     private void handlePackets(byte[] data) throws IOException {

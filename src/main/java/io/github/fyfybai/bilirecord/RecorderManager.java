@@ -21,6 +21,7 @@ public final class RecorderManager {
 
         List<String> command = new ArrayList<>(List.of(
                 "ffmpeg",
+                "-y",
                 "-hide_banner",
                 "-loglevel", "warning",
                 "-user_agent", "biliRecord/0.1",
@@ -53,6 +54,7 @@ public final class RecorderManager {
         Files.createDirectories(logFile.toAbsolutePath().normalize().getParent());
         List<String> command = new ArrayList<>(List.of(
                 "ffmpeg",
+                "-y",
                 "-hide_banner",
                 "-loglevel", "warning",
                 "-stats_period", "0.25",

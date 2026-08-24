@@ -21,12 +21,21 @@ public final class AutoRecorder {
 
     public void run(long roomId) throws IOException, InterruptedException {
         LifecycleStateMachine lifecycle = new LifecycleStateMachine();
+        RetryBackoff apiBackoff = new RetryBackoff();
+        RetryBackoff recoveryBackoff = new RetryBackoff();
         AtomicReference<LiveRecordingSession> currentSession = new AtomicReference<>();
         Thread shutdownHook = new Thread(() -> closeForShutdown(currentSession.get()), "recorder-shutdown");
         Runtime.getRuntime().addShutdownHook(shutdownHook);
         try {
             while (!Thread.currentThread().isInterrupted()) {
-                RoomInfo room = roomClient.getRoomInfo(roomId);
+                RoomInfo room;
+                try {
+                    room = roomClient.getRoomInfo(roomId);
+                    apiBackoff.reset();
+                } catch (IOException exception) {
+                    waitForRetry("room API", exception, apiBackoff);
+                    continue;
+                }
                 LifecycleAction action = lifecycle.observe(room.status());
                 System.out.printf("%s room=%d state=%s title=%s%n",
                         Instant.now(), room.roomId(), lifecycle.state(), room.title());
@@ -35,10 +44,12 @@ public final class AutoRecorder {
                         LiveRecordingSession session = LiveRecordingSession.start(room);
                         currentSession.set(session);
                         lifecycle.recordingStarted();
+                        recoveryBackoff.reset();
                         System.out.println("recording session=" + session.directory());
-                    } catch (IOException | InterruptedException | RuntimeException exception) {
+                    } catch (IOException exception) {
                         lifecycle.startFailed();
-                        throw exception;
+                        waitForRetry("recording start", exception, recoveryBackoff);
+                        continue;
                     }
                 } else if (action == LifecycleAction.STOP) {
                     LiveRecordingSession session = currentSession.getAndSet(null);
@@ -47,6 +58,17 @@ public final class AutoRecorder {
                     }
                     lifecycle.recordingStopped();
                     System.out.println("recording stopped after three offline confirmations");
+                } else if (room.status() == RoomStatus.LIVE) {
+                    LiveRecordingSession session = currentSession.get();
+                    if (session != null) {
+                        try {
+                            session.recoverIfNeeded();
+                            recoveryBackoff.reset();
+                        } catch (IOException exception) {
+                            waitForRetry("recording recovery", exception, recoveryBackoff);
+                            continue;
+                        }
+                    }
                 }
                 Thread.sleep(pollInterval(lifecycle.state()));
             }
@@ -70,6 +92,14 @@ public final class AutoRecorder {
             return ACTIVE_POLL_INTERVAL;
         }
         return Duration.ofSeconds(ThreadLocalRandom.current().nextInt(25, 36));
+    }
+
+    private static void waitForRetry(String operation, IOException exception, RetryBackoff backoff)
+            throws InterruptedException {
+        Duration delay = backoff.nextDelay();
+        System.err.printf("%s failed: %s; retrying in %d seconds%n",
+                operation, exception.getMessage(), delay.toSeconds());
+        Thread.sleep(delay);
     }
 
     private static void closeForShutdown(LiveRecordingSession session) {

@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -16,7 +17,7 @@ import java.util.concurrent.TimeoutException;
 public final class RecordingHandle implements AutoCloseable {
     private final Process process;
     private final Thread outputReader;
-    private final CompletableFuture<Duration> firstProgress = new CompletableFuture<>();
+    private final CompletableFuture<RecordingStart> firstProgress = new CompletableFuture<>();
     private final SessionClock clock;
     private final Path output;
     private volatile Duration latestProgress = Duration.ZERO;
@@ -29,7 +30,7 @@ public final class RecordingHandle implements AutoCloseable {
         outputReader = Thread.ofVirtual().name("ffmpeg-progress").start(() -> readOutput(log));
     }
 
-    public Duration awaitStarted(Duration timeout) throws IOException, InterruptedException {
+    public RecordingStart awaitStarted(Duration timeout) throws IOException, InterruptedException {
         try {
             return firstProgress.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException exception) {
@@ -110,8 +111,12 @@ public final class RecordingHandle implements AutoCloseable {
             Duration position = Duration.ofNanos(Long.parseLong(value) * 1_000L);
             latestProgress = position;
             if (!firstProgress.isDone()) {
-                clock.anchorVideo(position);
-                firstProgress.complete(position);
+                Instant observedAt = Instant.now();
+                long observedNanos = System.nanoTime();
+                clock.anchorVideo(position, observedAt, observedNanos);
+                long segmentStart = clock.sessionOffsetMillis(observedNanos).orElseThrow()
+                        - position.toMillis();
+                firstProgress.complete(new RecordingStart(position, segmentStart));
             }
         } catch (NumberFormatException ignored) {
             // A later progress record can still provide a numeric timestamp.

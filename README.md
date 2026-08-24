@@ -88,10 +88,15 @@ stop after three consecutive offline confirmations five seconds apart:
 java -jar target/bili-record.jar 92613 --auto
 ```
 
-An automatic run writes one session directory containing `video/000000.mkv`,
-`logs/ffmpeg.log`, `timeline.sqlite` and `raw-events.jsonl`. Press Ctrl+C to
-finish the active session cleanly. Network and process recovery will be added
-in Phase 8.
+An automatic run writes one session directory containing video segments,
+per-segment FFmpeg logs, `timeline.sqlite` and `raw-events.jsonl`. Press Ctrl+C
+to finish the active session cleanly.
+
+Temporary failures are recovered without ending the live session. Room API
+requests use a capped `1s, 2s, 5s, 10s, 30s` backoff. A closed danmaku socket
+gets a fresh host and token; an exited FFmpeg process gets a newly resolved
+stream URL and starts another timeline-aligned MKV segment. All CDN candidates
+for the selected stream variant are tried before the next backoff cycle.
 
 ## Listen to danmaku
 
@@ -132,6 +137,7 @@ print `OFFLINE`.
 - [x] Phase 5: storage
 - [x] Phase 6: session clock
 - [x] Phase 7: lifecycle
-- [ ] Phase 8: recovery
+- [x] Phase 8: recovery
+- [ ] Phase 9: desktop UI and normalized event feed
 
 Authentication data and recordings are local-only and must not be committed.
