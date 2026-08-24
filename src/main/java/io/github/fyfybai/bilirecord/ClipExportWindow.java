@@ -5,7 +5,6 @@ import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JDialog;
-import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -15,9 +14,9 @@ import javax.swing.JTextField;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.FileDialog;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridLayout;
@@ -168,12 +167,16 @@ final class ClipExportWindow {
     }
 
     private void chooseOutput() {
-        JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("设置导出位置");
-        chooser.setFileFilter(new FileNameExtensionFilter("MP4 视频", "mp4"));
-        chooser.setSelectedFile(Path.of(outputField.getText()).toFile());
-        if (chooser.showSaveDialog(dialog) == JFileChooser.APPROVE_OPTION) {
-            outputField.setText(withMp4Extension(chooser.getSelectedFile().toPath()).toString());
+        Path current = Path.of(outputField.getText()).toAbsolutePath().normalize();
+        FileDialog chooser = new FileDialog(dialog, "设置导出位置", FileDialog.SAVE);
+        chooser.setDirectory(current.getParent().toString());
+        chooser.setFile(current.getFileName().toString());
+        chooser.setFilenameFilter((directory, name) -> name.toLowerCase(java.util.Locale.ROOT)
+                .endsWith(".mp4"));
+        chooser.setVisible(true);
+        if (chooser.getFile() != null) {
+            outputField.setText(withMp4Extension(
+                    Path.of(chooser.getDirectory(), chooser.getFile())).toString());
         }
     }
 
