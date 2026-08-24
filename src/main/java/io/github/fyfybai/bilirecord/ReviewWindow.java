@@ -53,6 +53,7 @@ final class ReviewWindow {
             "tiny", "base", "small", "medium", "large-v3-turbo"});
     private final JComboBox<String> deviceChoice = new JComboBox<>(new String[]{"CPU", "CUDA"});
     private final JComboBox<String> languageChoice = new JComboBox<>(new String[]{"中文", "自动识别"});
+    private final JButton exportButton = new JButton("导出片段");
     private final JButton transcribeButton = new JButton("生成转录");
     private final JProgressBar progress = new JProgressBar(0, 1000);
     private final JLabel asrStatus = new JLabel("尚未生成转录");
@@ -194,12 +195,18 @@ final class ReviewWindow {
         modelChoice.setToolTipText("本地语音识别模型");
         deviceChoice.setToolTipText("推理设备");
         languageChoice.setToolTipText("音频语言");
+        UiTheme.outline(exportButton);
+        exportButton.addActionListener(event -> ClipExportWindow.open(
+                frame,
+                timeline,
+                () -> player == null ? 0 : player.currentPositionMs()));
         UiTheme.accent(transcribeButton);
         transcribeButton.setEnabled(summary.endedAt() != null);
         transcribeButton.addActionListener(event -> toggleTranscription());
         asr.add(modelChoice);
         asr.add(deviceChoice);
         asr.add(languageChoice);
+        asr.add(exportButton);
         asr.add(transcribeButton);
         header.add(asr, BorderLayout.EAST);
         return header;

@@ -283,6 +283,10 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
         positionListener = listener == null ? ignored -> { } : listener;
     }
 
+    long currentPositionMs() {
+        return currentOffsetMs;
+    }
+
     void setMarkers(List<TimelineEntry> entries) {
         updatingSlider = true;
         slider.setTimeline(entries, timeline.durationMs());
