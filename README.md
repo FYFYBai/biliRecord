@@ -66,6 +66,19 @@ The planned credential lifecycle is:
 QR login -> local auth file -> validity check -> refresh or re-login -> logout
 ```
 
+## Record a sample
+
+Resolve the stream closest to 1080p, confirm its actual dimensions with
+FFprobe, then remux it to MKV without re-encoding:
+
+```shell
+java -jar target/bili-record.jar 92613 --record 30
+```
+
+Recordings stay under the locally ignored `recordings/` directory. This phase
+records a requested duration; automatic start, stop, segmentation and recovery
+belong to the later lifecycle phases.
+
 The one-shot command prints `LIVE` when `live_status` is `1`; other room states
 print `OFFLINE`.
 
@@ -74,7 +87,7 @@ print `OFFLINE`.
 - [x] Phase 1: room monitor
 - [x] Phase 2: stream resolver
 - [x] Authentication prerequisite: QR login and local storage
-- [ ] Phase 3: recorder
+- [x] Phase 3: recorder
 - [ ] Phase 4: danmaku client
 - [ ] Phase 5: storage
 - [ ] Phase 6: session clock

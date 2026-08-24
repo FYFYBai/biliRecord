@@ -3,6 +3,7 @@ package io.github.fyfybai.bilirecord;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ThreadLocalRandom;
@@ -20,14 +21,19 @@ public final class Main {
             return;
         }
 
-        if (args.length < 1 || args.length > 2
-                || (args.length == 2 && !"--watch".equals(args[1]) && !"--streams".equals(args[1]))) {
+        if (args.length < 1 || args.length > 3
+                || (args.length == 2 && !"--watch".equals(args[1]) && !"--streams".equals(args[1]))
+                || (args.length == 3 && !"--record".equals(args[1]))) {
             printUsage();
             System.exit(2);
         }
 
         try {
             long roomId = RoomIdParser.parse(args[0]);
+            if (args.length == 3) {
+                record(roomId, parseDuration(args[2]));
+                return;
+            }
             if (args.length == 2 && "--streams".equals(args[1])) {
                 printStreams(new StreamResolver().resolve(roomId));
                 return;
@@ -42,6 +48,9 @@ public final class Main {
             System.err.println(exception.getMessage());
             printUsage();
             System.exit(2);
+        } catch (IllegalStateException exception) {
+            System.err.println(exception.getMessage());
+            System.exit(1);
         } catch (IOException exception) {
             System.err.println("Bilibili request failed: " + exception.getMessage());
             System.exit(1);
@@ -83,9 +92,38 @@ public final class Main {
         }
     }
 
+    private static void record(long roomId, Duration duration) throws IOException, InterruptedException {
+        PlayInfo playInfo = new StreamResolver().resolve(roomId);
+        if (playInfo.status() != RoomStatus.LIVE) {
+            throw new IllegalStateException("Room " + roomId + " is offline");
+        }
+
+        StreamVariant selected = new StreamSelector().selectPrefer1080p(playInfo);
+        var streamUrl = selected.urls().getFirst();
+        MediaInfo media = new MediaProbe().probe(streamUrl, playInfo.roomId());
+        System.out.printf("selected protocol=%s format=%s codec=%s qn=%d probed=%dx%d/%s%n",
+                selected.protocol(), selected.format(), selected.codec(), selected.qualityNumber(),
+                media.width(), media.height(), media.codec());
+        Path output = new RecorderManager().record(streamUrl, playInfo.roomId(), duration);
+        System.out.println("saved=" + output);
+    }
+
+    private static Duration parseDuration(String value) {
+        try {
+            long seconds = Long.parseLong(value);
+            if (seconds > 0) {
+                return Duration.ofSeconds(seconds);
+            }
+        } catch (NumberFormatException ignored) {
+            // Replaced below with a user-facing validation error.
+        }
+        throw new IllegalArgumentException("Recording duration must be a positive number of seconds");
+    }
+
     private static void printUsage() {
         System.err.println("Usage:");
         System.err.println("  java -jar bili-record.jar --login");
         System.err.println("  java -jar bili-record.jar <room-id-or-url> [--watch|--streams]");
+        System.err.println("  java -jar bili-record.jar <room-id-or-url> --record <seconds>");
     }
 }
