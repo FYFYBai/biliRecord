@@ -23,6 +23,7 @@ final class DesktopNotifier implements AutoCloseable {
     private final JMenuItem toggleItem;
     private final JPopupMenu trayMenu;
     private final JWindow trayMenuAnchor;
+    private long lastPopupRequestAt;
 
     DesktopNotifier(Runnable showWindow, Runnable toggleMonitoring, Runnable exit) {
         if (!SystemTray.isSupported()) {
@@ -74,16 +75,12 @@ final class DesktopNotifier implements AutoCloseable {
         trayIcon.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent event) {
-                if (event.isPopupTrigger()) {
-                    SwingUtilities.invokeLater(() -> showTrayMenu(event.getX(), event.getY()));
-                }
+                requestTrayMenu(event);
             }
 
             @Override
             public void mouseReleased(MouseEvent event) {
-                if (event.isPopupTrigger()) {
-                    SwingUtilities.invokeLater(() -> showTrayMenu(event.getX(), event.getY()));
-                }
+                requestTrayMenu(event);
             }
         });
         try {
@@ -136,6 +133,18 @@ final class DesktopNotifier implements AutoCloseable {
         if (trayIcon != null) {
             trayIcon.displayMessage(title, message, type);
         }
+    }
+
+    private void requestTrayMenu(MouseEvent event) {
+        if (!event.isPopupTrigger() && !SwingUtilities.isRightMouseButton(event)) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (now - lastPopupRequestAt < 300) {
+            return;
+        }
+        lastPopupRequestAt = now;
+        SwingUtilities.invokeLater(() -> showTrayMenu(event.getX(), event.getY()));
     }
 
     private void showTrayMenu(int screenX, int screenY) {
