@@ -30,6 +30,7 @@ public final class SessionStorage implements AutoCloseable {
     private final SessionClock clock;
     private final PreparedStatement insertEvent;
     private final PreparedStatement insertDanmaku;
+    private final PreparedStatement insertNormalized;
 
     private SessionStorage(Path directory, RoomInfo room, SessionClock clock) throws IOException {
         this.directory = directory;
@@ -50,6 +51,12 @@ public final class SessionStorage implements AutoCloseable {
                     Statement.RETURN_GENERATED_KEYS);
             insertDanmaku = database.prepareStatement(
                     "INSERT INTO danmaku(event_id, uid, username, text) VALUES (?, ?, ?, ?)");
+            insertNormalized = database.prepareStatement("""
+                    INSERT INTO normalized_event(
+                        event_id, kind, uid, username, content, item_name, quantity,
+                        price, price_unit, guard_level, purchase_kind, title, area)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """);
         } catch (SQLException exception) {
             throw new IOException("Could not initialize session database", exception);
         }
@@ -96,6 +103,9 @@ public final class SessionStorage implements AutoCloseable {
         } else {
             line.putNull("sessionOffsetMs");
         }
+        if (event.normalized() != null) {
+            line.set("normalized", objectMapper.valueToTree(event.normalized()));
+        }
         line.set("event", event.raw());
         rawEvents.write(objectMapper.writeValueAsString(line));
         rawEvents.newLine();
@@ -115,17 +125,25 @@ public final class SessionStorage implements AutoCloseable {
                 insertEvent.setNull(4, java.sql.Types.BIGINT);
             }
             insertEvent.executeUpdate();
-            if (event.message() != null) {
+            long eventId = 0;
+            if (event.message() != null || event.normalized() != null) {
                 try (ResultSet keys = insertEvent.getGeneratedKeys()) {
                     if (!keys.next()) {
                         throw new SQLException("SQLite returned no event ID");
                     }
-                    insertDanmaku.setLong(1, keys.getLong(1));
+                    eventId = keys.getLong(1);
                 }
+            }
+            if (event.message() != null) {
+                insertDanmaku.setLong(1, eventId);
                 insertDanmaku.setLong(2, event.message().uid());
                 insertDanmaku.setString(3, event.message().username());
                 insertDanmaku.setString(4, event.message().text());
                 insertDanmaku.executeUpdate();
+            }
+            if (event.normalized() != null) {
+                bindNormalized(eventId, event.normalized());
+                insertNormalized.executeUpdate();
             }
         } catch (SQLException exception) {
             throw new IOException("Could not store danmaku event", exception);
@@ -183,6 +201,7 @@ public final class SessionStorage implements AutoCloseable {
                 statement.setString(1, Instant.now().toString());
                 statement.executeUpdate();
             }
+            insertNormalized.close();
             insertDanmaku.close();
             insertEvent.close();
             database.close();
@@ -225,6 +244,23 @@ public final class SessionStorage implements AutoCloseable {
                     )
                     """);
             statement.executeUpdate("""
+                    CREATE TABLE normalized_event (
+                        event_id INTEGER PRIMARY KEY REFERENCES event(id),
+                        kind TEXT NOT NULL,
+                        uid INTEGER,
+                        username TEXT,
+                        content TEXT,
+                        item_name TEXT,
+                        quantity INTEGER,
+                        price INTEGER,
+                        price_unit TEXT,
+                        guard_level INTEGER,
+                        purchase_kind TEXT,
+                        title TEXT,
+                        area TEXT
+                    )
+                    """);
+            statement.executeUpdate("""
                     CREATE TABLE segment (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         path TEXT NOT NULL,
@@ -237,6 +273,7 @@ public final class SessionStorage implements AutoCloseable {
             statement.executeUpdate(
                     "CREATE INDEX event_session_offset_idx ON event(session_offset_ms)");
             statement.executeUpdate("CREATE INDEX danmaku_uid_idx ON danmaku(uid)");
+            statement.executeUpdate("CREATE INDEX normalized_event_kind_idx ON normalized_event(kind)");
         }
         try (PreparedStatement statement = database.prepareStatement(
                 """
@@ -248,6 +285,39 @@ public final class SessionStorage implements AutoCloseable {
             statement.setString(3, room.title());
             statement.setString(4, clock.sessionStartedAt().toString());
             statement.executeUpdate();
+        }
+    }
+
+    private void bindNormalized(long eventId, NormalizedEvent event) throws SQLException {
+        insertNormalized.setLong(1, eventId);
+        insertNormalized.setString(2, event.kind().name());
+        setLong(insertNormalized, 3, event.uid());
+        insertNormalized.setString(4, event.username());
+        insertNormalized.setString(5, event.content());
+        insertNormalized.setString(6, event.itemName());
+        setInteger(insertNormalized, 7, event.quantity());
+        setLong(insertNormalized, 8, event.price());
+        insertNormalized.setString(9, event.priceUnit());
+        setInteger(insertNormalized, 10, event.guardLevel());
+        insertNormalized.setString(11,
+                event.purchaseKind() == null ? null : event.purchaseKind().name());
+        insertNormalized.setString(12, event.title());
+        insertNormalized.setString(13, event.area());
+    }
+
+    private static void setLong(PreparedStatement statement, int index, Long value) throws SQLException {
+        if (value == null) {
+            statement.setNull(index, java.sql.Types.BIGINT);
+        } else {
+            statement.setLong(index, value);
+        }
+    }
+
+    private static void setInteger(PreparedStatement statement, int index, Integer value) throws SQLException {
+        if (value == null) {
+            statement.setNull(index, java.sql.Types.INTEGER);
+        } else {
+            statement.setInt(index, value);
         }
     }
 }

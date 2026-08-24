@@ -19,6 +19,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 public final class DanmakuClient implements WebSocket.Listener, AutoCloseable {
+    private static final String WEB_USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    + "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final DanmakuPacketCodec packetCodec = new DanmakuPacketCodec();
@@ -41,6 +44,8 @@ public final class DanmakuClient implements WebSocket.Listener, AutoCloseable {
         try {
             webSocket = httpClient.newWebSocketBuilder()
                     .connectTimeout(Duration.ofSeconds(10))
+                    .header("Origin", "https://live.bilibili.com")
+                    .header("User-Agent", WEB_USER_AGENT)
                     .buildAsync(info.servers().getFirst(), this)
                     .join();
             authenticated.get(10, TimeUnit.SECONDS);
@@ -104,6 +109,11 @@ public final class DanmakuClient implements WebSocket.Listener, AutoCloseable {
 
     @Override
     public java.util.concurrent.CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
+        if (!authenticated.isDone() && !closing) {
+            authenticated.completeExceptionally(new IOException(
+                    "Danmaku WebSocket closed during authentication: " + statusCode
+                            + (reason.isBlank() ? "" : " " + reason)));
+        }
         heartbeatExecutor.shutdownNow();
         closed.countDown();
         return CompletableFuture.completedFuture(null);

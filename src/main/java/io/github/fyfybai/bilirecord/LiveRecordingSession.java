@@ -5,12 +5,18 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public final class LiveRecordingSession implements AutoCloseable {
+    private static final Duration SEGMENT_DURATION = Duration.ofMinutes(30);
+    private static final Logger LOG = AppLog.get(LiveRecordingSession.class);
     private final RoomInfo room;
     private final SessionClock clock;
     private final SessionStorage storage;
+    private final RecordingObserver observer;
     private final StreamResolver streamResolver = new StreamResolver();
     private final DanmakuInfoResolver danmakuResolver = new DanmakuInfoResolver();
     private final AtomicBoolean closed = new AtomicBoolean();
@@ -21,22 +27,32 @@ public final class LiveRecordingSession implements AutoCloseable {
     private long segmentStartedOffsetMs;
     private int segmentCount;
 
-    private LiveRecordingSession(RoomInfo room, SessionClock clock, SessionStorage storage) {
+    private LiveRecordingSession(
+            RoomInfo room,
+            SessionClock clock,
+            SessionStorage storage,
+            RecordingObserver observer) {
         this.room = room;
         this.clock = clock;
         this.storage = storage;
+        this.observer = observer;
     }
 
     public static LiveRecordingSession start(RoomInfo room) throws IOException, InterruptedException {
+        return start(room, RecordingObserver.NONE);
+    }
+
+    public static LiveRecordingSession start(RoomInfo room, RecordingObserver observer)
+            throws IOException, InterruptedException {
         SessionClock clock = SessionClock.start();
         SessionStorage storage = SessionStorage.create(room, clock);
-        LiveRecordingSession session = new LiveRecordingSession(room, clock, storage);
+        LiveRecordingSession session = new LiveRecordingSession(room, clock, storage, observer);
         try {
             session.startNextSegment();
             try {
                 session.connectDanmaku();
             } catch (IOException exception) {
-                System.err.println("Danmaku connection will be retried: " + exception.getMessage());
+                LOG.log(Level.WARNING, "Danmaku connection will be retried", exception);
             }
             return session;
         } catch (IOException | InterruptedException | RuntimeException exception) {
@@ -49,20 +65,29 @@ public final class LiveRecordingSession implements AutoCloseable {
         return storage.directory();
     }
 
-    public synchronized void recoverIfNeeded() throws IOException, InterruptedException {
+    public synchronized String recoverIfNeeded() throws IOException, InterruptedException {
         if (closed.get()) {
-            return;
+            return null;
         }
-        if (recorder == null || !recorder.isAlive()) {
+        String recovery = null;
+        boolean rotateSegment = recorder != null
+                && recorder.videoPositionMillis() >= SEGMENT_DURATION.toMillis();
+        if (recorder == null || !recorder.isAlive() || rotateSegment) {
             finishCurrentSegment();
             startNextSegment();
-            System.out.println("recording recovered with a fresh stream URL and segment");
+            recovery = rotateSegment
+                    ? "Started a scheduled 30-minute recording segment"
+                    : "Recovered recording with a fresh stream URL and segment";
+            LOG.info(recovery);
         }
         if (danmaku == null || !danmaku.isOpen()) {
             disconnectDanmaku();
             connectDanmaku();
-            System.out.println("danmaku WebSocket reconnected");
+            String message = "Danmaku WebSocket reconnected";
+            recovery = recovery == null ? message : recovery + "; " + message;
+            LOG.info(message);
         }
+        return recovery;
     }
 
     @Override
@@ -149,22 +174,39 @@ public final class LiveRecordingSession implements AutoCloseable {
 
     private void connectDanmaku() throws IOException, InterruptedException {
         DanmakuInfo info = danmakuResolver.resolve(room.roomId());
-        DanmakuClient candidate = new DanmakuClient();
-        try {
-            candidate.connect(info, event -> {
-                storage.append(event);
-                DanmakuMessage message = event.message();
-                if (message != null) {
-                    long offset = clock.sessionOffsetMillis(event.receivedMonotonicNanos()).orElse(0);
-                    System.out.printf("[%s] [%s(%d)] %s%n",
-                            formatOffset(offset), message.username(), message.uid(), message.text());
-                }
-            });
-            danmaku = candidate;
-        } catch (IOException | InterruptedException exception) {
-            candidate.close();
-            throw exception;
+        IOException lastFailure = null;
+        for (URI server : info.servers()) {
+            DanmakuClient candidate = new DanmakuClient();
+            DanmakuInfo candidateInfo = new DanmakuInfo(
+                    info.roomId(), info.uid(), info.buvid(), info.token(), List.of(server));
+            try {
+                candidate.connect(candidateInfo, event -> {
+                    storage.append(event);
+                    if (event.normalized() != null) {
+                        observer.onEvent(
+                                event,
+                                clock.sessionOffsetMillis(event.receivedMonotonicNanos()).orElse(0));
+                    }
+                    DanmakuMessage message = event.message();
+                    if (message != null) {
+                        long offset = clock.sessionOffsetMillis(event.receivedMonotonicNanos()).orElse(0);
+                        System.out.printf("[%s] [%s(%d)] %s%n",
+                                formatOffset(offset), message.username(), message.uid(), message.text());
+                    }
+                });
+                danmaku = candidate;
+                LOG.info(() -> "Danmaku connected: " + server.getHost());
+                return;
+            } catch (InterruptedException exception) {
+                candidate.close();
+                throw exception;
+            } catch (IOException exception) {
+                candidate.close();
+                lastFailure = exception;
+                LOG.log(Level.FINE, "Danmaku server failed: " + server.getHost(), exception);
+            }
         }
+        throw new IOException("All danmaku servers failed", lastFailure);
     }
 
     private void disconnectDanmaku() {

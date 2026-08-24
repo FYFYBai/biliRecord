@@ -1,8 +1,8 @@
 # biliRecord
 
-A private Bilibili live monitor and recorder. It monitors room status, resolves
-live streams and can automatically record a complete live session with its
-danmaku timeline.
+A private Bilibili live monitor and recorder with a Windows desktop UI. It
+monitors room status, resolves live streams and automatically records a complete
+live session with its event timeline.
 
 ## Requirements
 
@@ -19,6 +19,26 @@ mvn clean package
 Build output stays under the locally ignored `target/` directory.
 
 ## Usage
+
+Open the desktop application by launching the JAR without arguments:
+
+```shell
+java -jar target/bili-record.jar
+```
+
+The UI accepts a room number or full Bilibili Live URL. It shows the canonical
+room ID, anchor UID, title, live state, elapsed recording time, session size and
+free disk space. QR login and account switching are available from the top bar.
+The selected room is remembered in the ignored local file
+`data/settings.json`.
+
+Closing or minimizing the window sends it to the Windows system tray. Native
+notifications report live start/stop, successful recovery, low disk space and
+runtime errors. Fatal errors are also shown in a dialog when the window is
+visible. Rotating application logs stay under the ignored `logs/` directory;
+each session keeps separate FFmpeg logs.
+
+The remaining commands provide direct diagnostics and testing.
 
 Check once with a room ID or a full Bilibili Live URL:
 
@@ -57,9 +77,8 @@ java -jar target/bili-record.jar --login
 The login window displays a QR code to scan and confirm with the Bilibili app.
 Cookies and the refresh token are saved only to the ignored local file
 `data/auth/cookies.json`. Authenticated API requests load that file without
-printing its contents. A future application UI will reuse this `AuthManager`
-flow as a login dialog and expose only login state, account identity and a
-logout command.
+printing its contents. The desktop top bar opens the same flow for login and
+account switching while exposing only the local login state.
 
 The planned credential lifecycle is:
 
@@ -97,6 +116,8 @@ requests use a capped `1s, 2s, 5s, 10s, 30s` backoff. A closed danmaku socket
 gets a fresh host and token; an exited FFmpeg process gets a newly resolved
 stream URL and starts another timeline-aligned MKV segment. All CDN candidates
 for the selected stream variant are tried before the next backoff cycle.
+Healthy recordings rotate into a new MKV segment every 30 minutes so a long
+session does not depend on one very large file.
 
 ## Listen to danmaku
 
@@ -121,8 +142,10 @@ recordings/room_<room-id>/<timestamp>/
 Every decoded server event is written to JSONL with its receive timestamp,
 video-relative `sessionOffsetMs` and a server timestamp when the event provides
 one. SQLite stores the same timeline fields, session and video anchors,
-recording segments, and parsed `DANMU_MSG` fields for later search and playback
-seeking.
+recording segments, and normalized display events for later search and playback
+seeking. The desktop feed displays only `LIVE`, `PREPARING`, `DANMU_MSG`,
+`ROOM_CHANGE`, `SEND_GIFT`, `SUPER_CHAT_MESSAGE` and `GUARD_BUY`. Other commands
+remain available in raw JSONL but are hidden from the UI.
 
 The one-shot command prints `LIVE` when `live_status` is `1`; other room states
 print `OFFLINE`.
@@ -138,6 +161,6 @@ print `OFFLINE`.
 - [x] Phase 6: session clock
 - [x] Phase 7: lifecycle
 - [x] Phase 8: recovery
-- [ ] Phase 9: desktop UI and normalized event feed
+- [x] Phase 9: desktop UI and normalized event feed
 
 Authentication data and recordings are local-only and must not be committed.

@@ -5,9 +5,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public final class AutoRecorder {
     private static final Duration ACTIVE_POLL_INTERVAL = Duration.ofSeconds(5);
+    private static final Logger LOG = AppLog.get(AutoRecorder.class);
 
     private final BiliHttpClient roomClient;
 
@@ -20,6 +23,10 @@ public final class AutoRecorder {
     }
 
     public void run(long roomId) throws IOException, InterruptedException {
+        run(roomId, RecordingObserver.NONE);
+    }
+
+    public void run(long roomId, RecordingObserver observer) throws IOException, InterruptedException {
         LifecycleStateMachine lifecycle = new LifecycleStateMachine();
         RetryBackoff apiBackoff = new RetryBackoff();
         RetryBackoff recoveryBackoff = new RetryBackoff();
@@ -33,22 +40,24 @@ public final class AutoRecorder {
                     room = roomClient.getRoomInfo(roomId);
                     apiBackoff.reset();
                 } catch (IOException exception) {
-                    waitForRetry("room API", exception, apiBackoff);
+                    waitForRetry("room API", exception, apiBackoff, observer);
                     continue;
                 }
                 LifecycleAction action = lifecycle.observe(room.status());
-                System.out.printf("%s room=%d state=%s title=%s%n",
-                        Instant.now(), room.roomId(), lifecycle.state(), room.title());
+                observer.onRoomUpdated(room, lifecycle.state());
+                LOG.fine(() -> "%s room=%d state=%s title=%s".formatted(
+                        Instant.now(), room.roomId(), lifecycle.state(), room.title()));
                 if (action == LifecycleAction.START) {
                     try {
-                        LiveRecordingSession session = LiveRecordingSession.start(room);
+                        LiveRecordingSession session = LiveRecordingSession.start(room, observer);
                         currentSession.set(session);
                         lifecycle.recordingStarted();
                         recoveryBackoff.reset();
-                        System.out.println("recording session=" + session.directory());
+                        LOG.info(() -> "Recording started: " + session.directory());
+                        observer.onRecordingStarted(room, session.directory());
                     } catch (IOException exception) {
                         lifecycle.startFailed();
-                        waitForRetry("recording start", exception, recoveryBackoff);
+                        waitForRetry("recording start", exception, recoveryBackoff, observer);
                         continue;
                     }
                 } else if (action == LifecycleAction.STOP) {
@@ -57,15 +66,19 @@ public final class AutoRecorder {
                         session.close();
                     }
                     lifecycle.recordingStopped();
-                    System.out.println("recording stopped after three offline confirmations");
+                    LOG.info("Recording stopped after three offline confirmations");
+                    observer.onRecordingStopped(room);
                 } else if (room.status() == RoomStatus.LIVE) {
                     LiveRecordingSession session = currentSession.get();
                     if (session != null) {
                         try {
-                            session.recoverIfNeeded();
+                            String recovery = session.recoverIfNeeded();
+                            if (recovery != null) {
+                                observer.onRecovery(recovery);
+                            }
                             recoveryBackoff.reset();
                         } catch (IOException exception) {
-                            waitForRetry("recording recovery", exception, recoveryBackoff);
+                            waitForRetry("recording recovery", exception, recoveryBackoff, observer);
                             continue;
                         }
                     }
@@ -94,11 +107,17 @@ public final class AutoRecorder {
         return Duration.ofSeconds(ThreadLocalRandom.current().nextInt(25, 36));
     }
 
-    private static void waitForRetry(String operation, IOException exception, RetryBackoff backoff)
+    private static void waitForRetry(
+            String operation,
+            IOException exception,
+            RetryBackoff backoff,
+            RecordingObserver observer)
             throws InterruptedException {
         Duration delay = backoff.nextDelay();
-        System.err.printf("%s failed: %s; retrying in %d seconds%n",
+        String message = "%s failed: %s; retrying in %d seconds".formatted(
                 operation, exception.getMessage(), delay.toSeconds());
+        LOG.log(Level.WARNING, message, exception);
+        observer.onWarning(operation, message);
         Thread.sleep(delay);
     }
 
@@ -109,7 +128,7 @@ public final class AutoRecorder {
         try {
             session.close();
         } catch (IOException exception) {
-            System.err.println("Could not close recording session: " + exception.getMessage());
+            LOG.log(Level.SEVERE, "Could not close recording session", exception);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
         }

@@ -10,5 +10,6 @@ public record DanmakuEvent(
         Instant receivedAt,
         long receivedMonotonicNanos,
         JsonNode raw,
-        DanmakuMessage message) {
+        DanmakuMessage message,
+        NormalizedEvent normalized) {
 }

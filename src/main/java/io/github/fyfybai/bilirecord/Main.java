@@ -16,6 +16,11 @@ public final class Main {
         System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
         System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8));
 
+        if (args.length == 0 || (args.length == 1 && "--ui".equals(args[0]))) {
+            DesktopApp.open();
+            return;
+        }
+
         if (args.length == 1 && "--login".equals(args[0])) {
             AuthLoginWindow.open(new AuthManager());
             return;
@@ -152,6 +157,7 @@ public final class Main {
 
     private static void printUsage() {
         System.err.println("Usage:");
+        System.err.println("  java -jar bili-record.jar [--ui]");
         System.err.println("  java -jar bili-record.jar --login");
         System.err.println("  java -jar bili-record.jar <room-id-or-url> [--watch|--streams|--auto]");
         System.err.println("  java -jar bili-record.jar <room-id-or-url> --record <seconds>");

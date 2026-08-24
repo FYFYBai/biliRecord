@@ -17,6 +17,7 @@
         <zxing.version>3.5.3</zxing.version>
         <brotli.version>0.1.2</brotli.version>
         <sqlite.version>3.53.2.1</sqlite.version>
+        <flatlaf.version>3.7.2</flatlaf.version>
     </properties>
 
     <dependencies>
@@ -39,6 +40,11 @@
             <groupId>org.xerial</groupId>
             <artifactId>sqlite-jdbc</artifactId>
             <version>${sqlite.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf</artifactId>
+            <version>${flatlaf.version}</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
