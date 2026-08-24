@@ -134,21 +134,47 @@ if (-not (Test-Path -LiteralPath (Join-Path $app "app\tools\vlc\libvlc.dll")) -o
 & (Join-Path $app "app\tools\python\python.exe") -c "import faster_whisper; print('faster-whisper ready')"
 if ($LASTEXITCODE -ne 0) { throw "Bundled transcription runtime smoke test failed" }
 
-& jpackage `
-    --type exe `
-    --dest $release `
-    --app-image $app `
-    --name $appName `
-    --app-version $Version `
-    --vendor "FYFYBai" `
-    --description "Bilibili live recorder and review tool" `
-    --win-per-user-install `
-    --win-dir-chooser `
-    --win-menu `
-    --win-menu-group $appName `
-    --win-shortcut `
-    --install-dir $appName
-if ($LASTEXITCODE -ne 0) { throw "jpackage EXE build failed" }
+$installerScript = Join-Path $target "BaiChenRecorder.iss"
+$installerSource = $app
+$installerOutput = $release
+$installerIcon = $icon
+@"
+[Setup]
+AppId=FYFYBai.BaiChenRecorder
+AppName=白沉的录播小工具
+AppVersion=$Version
+AppPublisher=FYFYBai
+DefaultDirName={localappdata}\Programs\BaiChenRecorder
+DefaultGroupName=白沉的录播小工具
+DisableProgramGroupPage=yes
+PrivilegesRequired=lowest
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+OutputDir=$installerOutput
+OutputBaseFilename=BaiChenRecorder-$Version-windows-x64
+SetupIconFile=$installerIcon
+Compression=lzma2
+SolidCompression=yes
+WizardStyle=modern
+UninstallDisplayIcon={app}\BaiChenRecorder.exe
+
+[Tasks]
+Name: "desktopicon"; Description: "创建桌面快捷方式"; Flags: checkedonce
+
+[Files]
+Source: "$installerSource\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Icons]
+Name: "{autoprograms}\白沉的录播小工具"; Filename: "{app}\BaiChenRecorder.exe"
+Name: "{autodesktop}\白沉的录播小工具"; Filename: "{app}\BaiChenRecorder.exe"; Tasks: desktopicon
+"@ | Set-Content -LiteralPath $installerScript -Encoding utf8BOM
+
+$iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+if (-not (Test-Path -LiteralPath $iscc)) {
+    throw "Inno Setup compiler was not found"
+}
+& $iscc $installerScript
+if ($LASTEXITCODE -ne 0) { throw "Inno Setup EXE build failed" }
 
 $installer = Get-ChildItem -LiteralPath $release -Filter "*.exe" | Select-Object -First 1
 $hash = Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256
