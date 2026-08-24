@@ -21,6 +21,7 @@ public final class RecordingHandle implements AutoCloseable {
     private final SessionClock clock;
     private final Path output;
     private volatile Duration latestProgress = Duration.ZERO;
+    private volatile long lastProgressAdvanceNanos = System.nanoTime();
 
     RecordingHandle(Process process, SessionClock clock, Path output, Path logFile) throws IOException {
         this.process = process;
@@ -50,6 +51,12 @@ public final class RecordingHandle implements AutoCloseable {
 
     public long videoPositionMillis() {
         return latestProgress.toMillis();
+    }
+
+    public boolean isStalled(Duration timeout) {
+        return process.isAlive()
+                && firstProgress.isDone()
+                && System.nanoTime() - lastProgressAdvanceNanos >= timeout.toNanos();
     }
 
     public int awaitExit() throws InterruptedException {
@@ -109,7 +116,10 @@ public final class RecordingHandle implements AutoCloseable {
         }
         try {
             Duration position = Duration.ofNanos(Long.parseLong(value) * 1_000L);
-            latestProgress = position;
+            if (position.compareTo(latestProgress) > 0) {
+                latestProgress = position;
+                lastProgressAdvanceNanos = System.nanoTime();
+            }
             if (!firstProgress.isDone()) {
                 Instant observedAt = Instant.now();
                 long observedNanos = System.nanoTime();

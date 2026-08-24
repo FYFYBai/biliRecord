@@ -12,6 +12,7 @@ import java.util.logging.Logger;
 
 public final class LiveRecordingSession implements AutoCloseable {
     private static final Duration SEGMENT_DURATION = Duration.ofMinutes(30);
+    private static final Duration RECORDING_STALL_TIMEOUT = Duration.ofSeconds(30);
     private static final Logger LOG = AppLog.get(LiveRecordingSession.class);
     private final RoomInfo room;
     private final SessionClock clock;
@@ -72,12 +73,15 @@ public final class LiveRecordingSession implements AutoCloseable {
         String recovery = null;
         boolean rotateSegment = recorder != null
                 && recorder.videoPositionMillis() >= SEGMENT_DURATION.toMillis();
-        if (recorder == null || !recorder.isAlive() || rotateSegment) {
+        boolean stalled = recorder != null && recorder.isStalled(RECORDING_STALL_TIMEOUT);
+        if (recorder == null || !recorder.isAlive() || rotateSegment || stalled) {
             finishCurrentSegment();
             startNextSegment();
             recovery = rotateSegment
                     ? "Started a scheduled 30-minute recording segment"
-                    : "Recovered recording with a fresh stream URL and segment";
+                    : stalled
+                            ? "Recovered a stalled recording with a fresh stream URL and segment"
+                            : "Recovered recording with a fresh stream URL and segment";
             LOG.info(recovery);
         }
         if (danmaku == null || !danmaku.isOpen()) {

@@ -116,7 +116,8 @@ public final class AutoRecorder {
         Duration delay = backoff.nextDelay();
         String message = "%s failed: %s; retrying in %d seconds".formatted(
                 operation, exception.getMessage(), delay.toSeconds());
-        LOG.log(Level.WARNING, message, exception);
+        LOG.warning(message);
+        LOG.log(Level.FINE, message + " details", exception);
         observer.onWarning(operation, message);
         Thread.sleep(delay);
     }
