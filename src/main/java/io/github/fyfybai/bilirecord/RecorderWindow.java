@@ -61,6 +61,7 @@ public final class RecorderWindow {
     private final JTextArea logArea = new JTextArea();
     private final DesktopSettingsStore settingsStore = new DesktopSettingsStore();
     private final SessionCatalog sessionCatalog = new SessionCatalog();
+    private final FloatingNotice floatingNotice = new FloatingNotice(frame);
     private final AtomicBoolean storageReadRunning = new AtomicBoolean();
     private final AtomicBoolean sessionReadRunning = new AtomicBoolean();
 
@@ -505,8 +506,7 @@ public final class RecorderWindow {
     private void openSelectedSession() {
         int selected = sessionTable.getSelectedRow();
         if (selected < 0) {
-            JOptionPane.showMessageDialog(frame, "请先选择一条录制记录。",
-                    "未选择 Session", JOptionPane.INFORMATION_MESSAGE);
+            floatingNotice.show("尚未选择录制记录", "请先选择一条 Session，再打开文件夹");
             return;
         }
         int modelRow = sessionTable.convertRowIndexToModel(selected);
@@ -625,6 +625,7 @@ public final class RecorderWindow {
             }
             SwingUtilities.invokeLater(() -> {
                 uiTimer.stop();
+                floatingNotice.close();
                 notifier.close();
                 try {
                     if (logSubscription != null) {
