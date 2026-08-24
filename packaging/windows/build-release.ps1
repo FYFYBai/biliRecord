@@ -111,7 +111,7 @@ $common = @(
     "--name", $appName,
     "--app-version", $Version,
     "--vendor", "FYFYBai",
-    "--description", "白沉的录播小工具",
+    "--description", "Bilibili live recorder and review tool",
     "--icon", $icon,
     "--input", $input,
     "--main-jar", "bili-record.jar",
@@ -141,11 +141,11 @@ if ($LASTEXITCODE -ne 0) { throw "Bundled transcription runtime smoke test faile
     --name $appName `
     --app-version $Version `
     --vendor "FYFYBai" `
-    --description "白沉的录播小工具" `
+    --description "Bilibili live recorder and review tool" `
     --win-per-user-install `
     --win-dir-chooser `
     --win-menu `
-    --win-menu-group "白沉的录播小工具" `
+    --win-menu-group $appName `
     --win-shortcut `
     --install-dir $appName
 if ($LASTEXITCODE -ne 0) { throw "jpackage EXE build failed" }
