@@ -28,6 +28,7 @@ import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.event.WindowEvent;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -58,6 +59,7 @@ public final class RecorderWindow {
     private final EventTableModel eventModel = new EventTableModel();
     private final SessionTableModel sessionModel = new SessionTableModel();
     private final JTable sessionTable = table(sessionModel);
+    private final JButton deleteSessionButton = new JButton("删除");
     private final JTextArea logArea = new JTextArea();
     private final DesktopSettingsStore settingsStore = new DesktopSettingsStore();
     private final SessionCatalog sessionCatalog = new SessionCatalog();
@@ -258,9 +260,15 @@ public final class RecorderWindow {
         JButton open = new JButton("打开文件夹");
         UiTheme.outline(open);
         open.addActionListener(event -> openSelectedSession());
+        UiTheme.destructive(deleteSessionButton);
+        deleteSessionButton.setEnabled(false);
+        deleteSessionButton.addActionListener(event -> deleteSelectedSession());
+        sessionTable.getSelectionModel().addListSelectionListener(event ->
+                deleteSessionButton.setEnabled(sessionTable.getSelectedRow() >= 0));
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         actions.setOpaque(false);
         actions.add(refresh);
+        actions.add(deleteSessionButton);
         actions.add(open);
         JPanel header = new JPanel(new BorderLayout());
         header.setOpaque(false);
@@ -511,6 +519,65 @@ public final class RecorderWindow {
         }
         int modelRow = sessionTable.convertRowIndexToModel(selected);
         openPath(sessionModel.get(modelRow).directory());
+    }
+
+    private void deleteSelectedSession() {
+        int selected = sessionTable.getSelectedRow();
+        if (selected < 0) {
+            floatingNotice.show("尚未选择录制记录", "请先选择一条 Session，再执行删除");
+            return;
+        }
+        int modelRow = sessionTable.convertRowIndexToModel(selected);
+        SessionSummary session = sessionModel.get(modelRow);
+        Path directory = session.directory().toAbsolutePath().normalize();
+        Path current = activeSession == null ? null : activeSession.toAbsolutePath().normalize();
+        if (directory.equals(current) || session.endedAt() == null) {
+            floatingNotice.show("无法删除正在录制的 Session", "请先停止监控并等待录像完成");
+            return;
+        }
+        Object[] options = {"移入回收站", "取消"};
+        int choice = JOptionPane.showOptionDialog(
+                frame,
+                "房间 %d\n%s\n%s".formatted(
+                        session.roomId(), session.title(), directory),
+                "删除本地录制记录",
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.WARNING_MESSAGE,
+                null,
+                options,
+                options[1]);
+        if (choice != 0) {
+            return;
+        }
+        deleteSessionButton.setEnabled(false);
+        Thread.ofVirtual().start(() -> moveSessionToTrash(directory));
+    }
+
+    private void moveSessionToTrash(Path directory) {
+        String failure = null;
+        try {
+            if (!Files.exists(directory)) {
+                failure = "录制目录已经不存在";
+            } else if (!Desktop.isDesktopSupported()
+                    || !Desktop.getDesktop().isSupported(Desktop.Action.MOVE_TO_TRASH)) {
+                failure = "当前系统不支持移入回收站";
+            } else if (!Desktop.getDesktop().moveToTrash(directory.toFile())) {
+                failure = "系统未能将录制目录移入回收站";
+            }
+        } catch (RuntimeException exception) {
+            failure = exception.getMessage() == null ? "删除录制目录失败" : exception.getMessage();
+            LOG.log(Level.WARNING, "Could not move session to trash " + directory, exception);
+        }
+        String result = failure;
+        SwingUtilities.invokeLater(() -> {
+            refreshSessions();
+            if (result == null) {
+                floatingNotice.show("录制记录已移入回收站", directory.getFileName().toString());
+            } else {
+                floatingNotice.show("无法删除录制记录", result);
+                deleteSessionButton.setEnabled(sessionTable.getSelectedRow() >= 0);
+            }
+        });
     }
 
     private void openPath(Path path) {

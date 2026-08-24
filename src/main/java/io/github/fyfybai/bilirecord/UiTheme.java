@@ -24,6 +24,7 @@ final class UiTheme {
     static final Color BLUE = new Color(0x00AEEC);
     static final Color GREEN = new Color(0x2AC864);
     static final Color WARNING = new Color(0xF69C0B);
+    static final Color DANGER = new Color(0xF85A54);
 
     private UiTheme() {
     }
@@ -56,6 +57,14 @@ final class UiTheme {
         button.putClientProperty("FlatLaf.style",
                 "background: #FFFFFF; hoverBackground: #F1F2F3; borderColor: #E3E5E7;"
                         + "focusWidth: 0; arc: 8");
+    }
+
+    static void destructive(JButton button) {
+        button.setBackground(SURFACE);
+        button.setForeground(DANGER);
+        button.putClientProperty("FlatLaf.style",
+                "background: #FFFFFF; hoverBackground: #FFF1F0; borderColor: #F85A54;"
+                        + "foreground: #F85A54; focusWidth: 0; arc: 8");
     }
 
     static void placeholder(JComponent component, String text) {
