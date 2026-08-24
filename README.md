@@ -1,7 +1,7 @@
 # biliRecord
 
-A private Bilibili live monitor and recorder. The current first phase resolves a
-room ID and reports whether the room is live.
+A private Bilibili live monitor and recorder. It currently monitors room status
+and resolves available live stream variants.
 
 ## Requirements
 
@@ -31,13 +31,25 @@ Monitor continuously with a randomized 25-35 second polling interval:
 java -jar target/bili-record.jar 6 --watch
 ```
 
+List the room owner UID, quality descriptions, protocols, formats, codecs,
+reported dimensions and CDN candidates:
+
+```shell
+java -jar target/bili-record.jar 92613 --streams
+```
+
+Signed stream URLs are retained by the resolver for the recorder phase, but the
+CLI only prints CDN hostnames. API quality numbers are treated as platform
+quality tiers; reported dimensions will be independently checked with FFprobe
+in the recorder phase.
+
 The one-shot command prints `LIVE` when `live_status` is `1`; other room states
 print `OFFLINE`.
 
 ## Status
 
 - [x] Phase 1: room monitor
-- [ ] Phase 2: stream resolver
+- [x] Phase 2: stream resolver
 - [ ] Phase 3: recorder
 - [ ] Phase 4: danmaku client
 - [ ] Phase 5: storage

@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -34,8 +33,7 @@ public final class BiliHttpClient {
     }
 
     public RoomInfo getRoomInfo(long roomId) throws IOException, InterruptedException {
-        String query = "room_id=" + URLEncoder.encode(Long.toString(roomId), StandardCharsets.UTF_8);
-        URI uri = URI.create(roomInfoEndpoint + "?" + query);
+        URI uri = URI.create(roomInfoEndpoint + "?room_id=" + roomId);
         HttpRequest request = HttpRequest.newBuilder(uri)
                 .timeout(Duration.ofSeconds(15))
                 .header("Accept", "application/json")
@@ -61,6 +59,7 @@ public final class BiliHttpClient {
                 : RoomStatus.OFFLINE;
         return new RoomInfo(
                 data.path("room_id").asLong(roomId),
+                data.path("uid").asLong(),
                 data.path("title").asText(""),
                 status);
     }
