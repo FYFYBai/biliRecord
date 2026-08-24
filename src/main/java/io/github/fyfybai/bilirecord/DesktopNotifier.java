@@ -13,6 +13,8 @@ import java.awt.SystemTray;
 import java.awt.TrayIcon;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -38,6 +40,13 @@ final class DesktopNotifier implements AutoCloseable {
         trayMenuAnchor = new JWindow();
         trayMenuAnchor.setSize(1, 1);
         trayMenuAnchor.setBackground(new Color(0, 0, 0, 0));
+        trayMenuAnchor.setAlwaysOnTop(true);
+        trayMenuAnchor.addWindowFocusListener(new WindowAdapter() {
+            @Override
+            public void windowLostFocus(WindowEvent event) {
+                trayMenu.setVisible(false);
+            }
+        });
         Font menuFont = UiTheme.uiFont(Font.PLAIN, 14f);
         trayMenu.setFont(menuFont);
         JMenuItem showItem = new JMenuItem("打开 " + UiTheme.APP_NAME);
@@ -155,5 +164,6 @@ final class DesktopNotifier implements AutoCloseable {
         trayMenuAnchor.setLocation(anchorX, anchorY);
         trayMenuAnchor.setVisible(true);
         trayMenu.show(trayMenuAnchor.getContentPane(), -size.width, -size.height);
+        trayMenuAnchor.requestFocus();
     }
 }
