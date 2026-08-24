@@ -78,6 +78,7 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
     private boolean updatingSlider;
     private boolean controlHover;
     private boolean closed;
+    private boolean muted;
     private int lastAudibleVolume = 80;
     private float controlOpacity = 1f;
     private float targetOpacity = 1f;
@@ -149,14 +150,12 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
         JPanel panel = new PlayerControlsPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setOpaque(false);
-        panel.setBorder(BorderFactory.createEmptyBorder(2, 12, 7, 12));
+        panel.setBorder(BorderFactory.createEmptyBorder(2, 0, 7, 0));
 
         slider.setOpaque(false);
         slider.setAlignmentX(Component.LEFT_ALIGNMENT);
         slider.setPreferredSize(new Dimension(10, 28));
         slider.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
-        slider.putClientProperty("FlatLaf.style",
-                "trackColor: #747474; thumbColor: #FB7299; focusWidth: 0; trackWidth: 3");
         slider.addChangeListener(event -> {
             if (updatingSlider) {
                 return;
@@ -179,6 +178,7 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
         JPanel row = new JPanel();
         row.setOpaque(false);
         row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
+        row.setBorder(BorderFactory.createEmptyBorder(0, 12, 0, 12));
         playButton.addActionListener(event -> togglePlayback());
         muteButton.addActionListener(event -> toggleMute());
         rateButton.addActionListener(event -> showRateMenu());
@@ -198,6 +198,7 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
         noticeLabel.setForeground(new Color(0xFFD06A));
         noticeLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         noticeLabel.setPreferredSize(new Dimension(10, 18));
+        noticeLabel.setBorder(BorderFactory.createEmptyBorder(0, 12, 0, 12));
         panel.add(noticeLabel);
         panel.addMouseListener(new MouseAdapter() {
             @Override
@@ -318,32 +319,28 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
     }
 
     private void toggleMute() {
-        boolean audible = volumeSlider.getValue() > 0
-                && !playerComponent.mediaPlayer().audio().isMute();
-        if (audible) {
+        if (volumeSlider.getValue() > 0) {
             lastAudibleVolume = volumeSlider.getValue();
             volumeSlider.setValue(0);
         } else {
             volumeSlider.setValue(Math.max(1, lastAudibleVolume));
         }
-        updateMuteButton();
+        volumeSlider.repaint();
         showControls();
     }
 
     private void applyVolume(int volume) {
         if (volume > 0) {
             lastAudibleVolume = volume;
-            playerComponent.mediaPlayer().audio().setMute(false);
-        } else {
-            playerComponent.mediaPlayer().audio().setMute(true);
         }
         playerComponent.mediaPlayer().audio().setVolume(volume);
+        muted = volume == 0;
+        playerComponent.mediaPlayer().audio().setMute(muted);
         updateMuteButton();
+        volumeSlider.repaint();
     }
 
     private void updateMuteButton() {
-        boolean muted = playerComponent.mediaPlayer().audio().isMute()
-                || volumeSlider.getValue() == 0;
         setButtonIcon(muteButton, muted
                 ? BootstrapIcons.VOLUME_MUTE_FILL
                 : BootstrapIcons.VOLUME_UP_FILL);
@@ -451,8 +448,8 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
     }
 
     private void seekFromSliderPoint(int x) {
-        int usable = Math.max(1, slider.getWidth() - 16);
-        double ratio = Math.max(0, Math.min(1, (x - 8) / (double) usable));
+        double ratio = Math.max(0, Math.min(1,
+                x / (double) Math.max(1, slider.getWidth() - 1)));
         int value = (int) Math.round(ratio * slider.getMaximum());
         updatingSlider = true;
         slider.setValue(value);
@@ -525,6 +522,14 @@ final class SessionPlayerPanel extends JPanel implements AutoCloseable {
         if (fullscreenSupported && playerComponent.mediaPlayer().fullScreen().isFullScreen()) {
             playerComponent.mediaPlayer().fullScreen().set(false);
         }
+    }
+
+    void refreshVideoLayout() {
+        videoLayer.revalidate();
+        videoLayer.doLayout();
+        playerComponent.videoSurfaceComponent().revalidate();
+        playerComponent.videoSurfaceComponent().repaint();
+        videoLayer.repaint();
     }
 
     private void showControls() {

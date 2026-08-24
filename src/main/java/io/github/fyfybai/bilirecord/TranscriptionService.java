@@ -144,6 +144,8 @@ final class TranscriptionService {
 
     private Process start(List<String> command, boolean mergeError) throws IOException {
         ProcessBuilder builder = new ProcessBuilder(command);
+        builder.environment().put("PYTHONIOENCODING", "utf-8");
+        builder.environment().put("PYTHONUTF8", "1");
         builder.redirectErrorStream(mergeError);
         Process process = builder.start();
         activeProcess = process;

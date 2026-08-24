@@ -13,6 +13,7 @@ import javax.swing.JSplitPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import javax.swing.WindowConstants;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -61,6 +62,7 @@ final class ReviewWindow {
     private JPanel headerPanel;
     private JPanel timelinePanel;
     private JSplitPane splitPane;
+    private int windowedDividerLocation;
     private volatile Thread transcriptionWorker;
 
     private ReviewWindow(SessionTimeline timeline) {
@@ -123,6 +125,7 @@ final class ReviewWindow {
                 timelinePanel);
         splitPane.setResizeWeight(0.62);
         splitPane.setDividerLocation(720);
+        windowedDividerLocation = 720;
         splitPane.setBorder(BorderFactory.createEmptyBorder(12, 16, 16, 16));
         splitPane.setBackground(UiTheme.BACKGROUND);
         root.add(splitPane, BorderLayout.CENTER);
@@ -136,6 +139,7 @@ final class ReviewWindow {
             }
             headerPanel.setVisible(!fullscreen);
             if (fullscreen) {
+                windowedDividerLocation = splitPane.getDividerLocation();
                 splitPane.setRightComponent(null);
                 splitPane.setDividerSize(0);
                 splitPane.setBorder(null);
@@ -143,16 +147,27 @@ final class ReviewWindow {
                 splitPane.setRightComponent(timelinePanel);
                 splitPane.setDividerSize(10);
                 splitPane.setBorder(BorderFactory.createEmptyBorder(12, 16, 16, 16));
-                splitPane.setDividerLocation(0.62);
+                splitPane.setDividerLocation(windowedDividerLocation);
             }
             frame.revalidate();
             frame.repaint();
+            refreshPlayerLayout();
         };
         if (SwingUtilities.isEventDispatchThread()) {
             update.run();
         } else {
             SwingUtilities.invokeLater(update);
         }
+    }
+
+    private void refreshPlayerLayout() {
+        if (player == null) {
+            return;
+        }
+        player.refreshVideoLayout();
+        Timer layoutTimer = new Timer(120, event -> player.refreshVideoLayout());
+        layoutTimer.setRepeats(false);
+        layoutTimer.start();
     }
 
     private JPanel buildHeader() {

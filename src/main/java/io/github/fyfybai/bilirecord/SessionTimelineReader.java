@@ -112,13 +112,17 @@ final class SessionTimelineReader {
                      ORDER BY start_offset_ms
                      """)) {
             while (result.next()) {
+                String text = result.getString("text");
+                if (text.indexOf('\uFFFD') >= 0) {
+                    text = "转录文本编码损坏，请重新生成转录";
+                }
                 entries.add(new TimelineEntry(
                         result.getLong("start_offset_ms"),
                         result.getLong("end_offset_ms"),
                         TimelineSource.TRANSCRIPT,
                         "转录",
                         "主播",
-                        result.getString("text")));
+                        text));
             }
         }
         return List.copyOf(entries);
