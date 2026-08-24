@@ -1,16 +1,21 @@
 package io.github.fyfybai.bilirecord;
 
-import javax.swing.JMenuItem;
-import javax.swing.JPopupMenu;
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JButton;
+import javax.swing.JDialog;
+import javax.swing.JPanel;
+import javax.swing.JSeparator;
+import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
-import javax.swing.JWindow;
-import javax.swing.event.PopupMenuEvent;
-import javax.swing.event.PopupMenuListener;
 import java.awt.AWTException;
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.SystemTray;
 import java.awt.TrayIcon;
+import java.awt.Window;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
@@ -20,11 +25,11 @@ import java.util.logging.Logger;
 
 final class DesktopNotifier implements AutoCloseable {
     private static final Logger LOG = AppLog.get(DesktopNotifier.class);
+    private static final int MENU_WIDTH = 190;
 
     private final TrayIcon trayIcon;
-    private final JMenuItem toggleItem;
-    private final JPopupMenu trayMenu;
-    private final JWindow trayMenuAnchor;
+    private final JButton toggleItem;
+    private final JDialog trayMenu;
     private long lastPopupRequestAt;
 
     DesktopNotifier(Runnable showWindow, Runnable toggleMonitoring, Runnable exit) {
@@ -32,52 +37,26 @@ final class DesktopNotifier implements AutoCloseable {
             trayIcon = null;
             toggleItem = null;
             trayMenu = null;
-            trayMenuAnchor = null;
             LOG.warning("System tray is not supported on this desktop");
             return;
         }
-        trayMenu = new JPopupMenu();
-        trayMenuAnchor = new JWindow();
-        trayMenuAnchor.setSize(1, 1);
-        trayMenuAnchor.setBackground(new Color(0, 0, 0, 0));
-        trayMenuAnchor.setAlwaysOnTop(true);
-        trayMenuAnchor.addWindowFocusListener(new WindowAdapter() {
+
+        Font menuFont = UiTheme.uiFont(Font.PLAIN, 14f);
+        trayMenu = new JDialog();
+        trayMenu.setUndecorated(true);
+        trayMenu.setType(Window.Type.POPUP);
+        trayMenu.setAlwaysOnTop(true);
+        trayMenu.setFocusableWindowState(true);
+        trayMenu.setContentPane(menuPanel(menuFont, showWindow, toggleMonitoring, exit));
+        trayMenu.pack();
+        trayMenu.addWindowFocusListener(new WindowAdapter() {
             @Override
             public void windowLostFocus(WindowEvent event) {
                 trayMenu.setVisible(false);
             }
         });
-        Font menuFont = UiTheme.uiFont(Font.PLAIN, 14f);
-        trayMenu.setFont(menuFont);
-        JMenuItem showItem = new JMenuItem("打开 " + UiTheme.APP_NAME);
-        showItem.setFont(menuFont);
-        showItem.addActionListener(event -> SwingUtilities.invokeLater(showWindow));
-        toggleItem = new JMenuItem("开始监控");
-        toggleItem.setFont(menuFont);
-        toggleItem.addActionListener(event -> SwingUtilities.invokeLater(toggleMonitoring));
-        JMenuItem exitItem = new JMenuItem("退出");
-        exitItem.setFont(menuFont);
-        exitItem.addActionListener(event -> SwingUtilities.invokeLater(exit));
-        trayMenu.add(showItem);
-        trayMenu.add(toggleItem);
-        trayMenu.addSeparator();
-        trayMenu.add(exitItem);
-        trayMenu.addPopupMenuListener(new PopupMenuListener() {
-            @Override
-            public void popupMenuWillBecomeVisible(PopupMenuEvent event) {
-            }
 
-            @Override
-            public void popupMenuWillBecomeInvisible(PopupMenuEvent event) {
-                trayMenuAnchor.setVisible(false);
-            }
-
-            @Override
-            public void popupMenuCanceled(PopupMenuEvent event) {
-                trayMenuAnchor.setVisible(false);
-            }
-        });
-
+        toggleItem = (JButton) ((JPanel) trayMenu.getContentPane()).getComponent(2);
         trayIcon = new TrayIcon(UiTheme.brandIcon(32).getImage(), UiTheme.APP_NAME);
         trayIcon.setImageAutoSize(true);
         trayIcon.addActionListener(event -> SwingUtilities.invokeLater(showWindow));
@@ -124,10 +103,7 @@ final class DesktopNotifier implements AutoCloseable {
     @Override
     public void close() {
         if (trayMenu != null) {
-            trayMenu.setVisible(false);
-        }
-        if (trayMenuAnchor != null) {
-            trayMenuAnchor.dispose();
+            trayMenu.dispose();
         }
         if (trayIcon != null) {
             try {
@@ -136,6 +112,49 @@ final class DesktopNotifier implements AutoCloseable {
                 LOG.log(Level.FINE, "Could not remove tray icon", exception);
             }
         }
+    }
+
+    private JPanel menuPanel(
+            Font menuFont,
+            Runnable showWindow,
+            Runnable toggleMonitoring,
+            Runnable exit) {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBackground(Color.WHITE);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(UiTheme.BORDER),
+                BorderFactory.createEmptyBorder(5, 5, 5, 5)));
+        panel.add(menuItem("打开 " + UiTheme.APP_NAME, menuFont, showWindow));
+        panel.add(Box.createVerticalStrut(2));
+        panel.add(menuItem("开始监控", menuFont, toggleMonitoring));
+        JSeparator separator = new JSeparator();
+        separator.setMaximumSize(new Dimension(MENU_WIDTH - 20, 7));
+        separator.setForeground(UiTheme.BORDER);
+        panel.add(separator);
+        panel.add(menuItem("退出", menuFont, exit));
+        return panel;
+    }
+
+    private JButton menuItem(String text, Font font, Runnable action) {
+        JButton button = new JButton(text);
+        button.setFont(font);
+        button.setForeground(UiTheme.TEXT);
+        button.setHorizontalAlignment(SwingConstants.LEFT);
+        button.setAlignmentX(JButton.LEFT_ALIGNMENT);
+        button.setPreferredSize(new Dimension(MENU_WIDTH - 10, 34));
+        button.setMaximumSize(new Dimension(MENU_WIDTH - 10, 34));
+        button.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
+        button.setFocusPainted(false);
+        button.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+        button.putClientProperty("FlatLaf.style",
+                "background: #FFFFFF; hoverBackground: #F1F2F3; pressedBackground: #E3E5E7;"
+                        + "borderWidth: 0; focusWidth: 0; arc: 6");
+        button.addActionListener(event -> {
+            trayMenu.setVisible(false);
+            SwingUtilities.invokeLater(action);
+        });
+        return button;
     }
 
     private void display(String title, String message, TrayIcon.MessageType type) {
@@ -158,12 +177,12 @@ final class DesktopNotifier implements AutoCloseable {
 
     private void showTrayMenu(int screenX, int screenY) {
         trayMenu.setVisible(false);
-        var size = trayMenu.getPreferredSize();
-        int anchorX = Math.max(size.width, screenX);
-        int anchorY = Math.max(size.height, screenY);
-        trayMenuAnchor.setLocation(anchorX, anchorY);
-        trayMenuAnchor.setVisible(true);
-        trayMenu.show(trayMenuAnchor.getContentPane(), -size.width, -size.height);
-        trayMenuAnchor.requestFocus();
+        trayMenu.pack();
+        int x = Math.max(0, screenX - trayMenu.getWidth());
+        int y = Math.max(0, screenY - trayMenu.getHeight());
+        trayMenu.setLocation(x, y);
+        trayMenu.setVisible(true);
+        trayMenu.toFront();
+        trayMenu.requestFocus();
     }
 }
