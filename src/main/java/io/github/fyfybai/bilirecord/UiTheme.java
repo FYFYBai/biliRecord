@@ -10,10 +10,12 @@ import javax.swing.UIManager;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
+import java.awt.GraphicsEnvironment;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 
 final class UiTheme {
+    private static final String UI_FONT_FAMILY = findUiFont();
     static final Color BACKGROUND = new Color(0xF6F7F8);
     static final Color SURFACE = Color.WHITE;
     static final Color TEXT = new Color(0x18191C);
@@ -31,7 +33,7 @@ final class UiTheme {
 
     static void install() {
         FlatLightLaf.setup();
-        Font font = new Font("Microsoft YaHei UI", Font.PLAIN, 14);
+        Font font = new Font(UI_FONT_FAMILY, Font.PLAIN, 14);
         UIManager.put("defaultFont", font);
         UIManager.put("Panel.background", BACKGROUND);
         UIManager.put("Component.arc", 8);
@@ -71,6 +73,10 @@ final class UiTheme {
         component.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, text);
     }
 
+    static Font uiFont(int style, float size) {
+        return new Font(UI_FONT_FAMILY, style, Math.round(size)).deriveFont(size);
+    }
+
     static ImageIcon brandIcon(int size) {
         BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
         Graphics2D graphics = image.createGraphics();
@@ -86,5 +92,17 @@ final class UiTheme {
                 (size - metrics.getHeight()) / 2 + metrics.getAscent());
         graphics.dispose();
         return new ImageIcon(image);
+    }
+
+    private static String findUiFont() {
+        var installed = java.util.Set.of(
+                GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames());
+        for (String candidate : new String[]{
+                "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "SimSun"}) {
+            if (installed.contains(candidate)) {
+                return candidate;
+            }
+        }
+        return Font.DIALOG;
     }
 }

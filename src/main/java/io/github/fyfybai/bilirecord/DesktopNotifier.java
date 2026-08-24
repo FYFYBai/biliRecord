@@ -2,6 +2,7 @@ package io.github.fyfybai.bilirecord;
 
 import javax.swing.SwingUtilities;
 import java.awt.AWTException;
+import java.awt.Font;
 import java.awt.MenuItem;
 import java.awt.PopupMenu;
 import java.awt.SystemTray;
@@ -23,11 +24,16 @@ final class DesktopNotifier implements AutoCloseable {
             return;
         }
         PopupMenu menu = new PopupMenu();
+        Font menuFont = UiTheme.uiFont(Font.PLAIN, 14f);
+        menu.setFont(menuFont);
         MenuItem showItem = new MenuItem("打开 biliRecord");
+        showItem.setFont(menuFont);
         showItem.addActionListener(event -> SwingUtilities.invokeLater(showWindow));
         toggleItem = new MenuItem("开始监控");
+        toggleItem.setFont(menuFont);
         toggleItem.addActionListener(event -> SwingUtilities.invokeLater(toggleMonitoring));
         MenuItem exitItem = new MenuItem("退出");
+        exitItem.setFont(menuFont);
         exitItem.addActionListener(event -> SwingUtilities.invokeLater(exit));
         menu.add(showItem);
         menu.add(toggleItem);
