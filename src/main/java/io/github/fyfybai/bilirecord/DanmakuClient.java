@@ -121,6 +121,11 @@ public final class DanmakuClient implements WebSocket.Listener, AutoCloseable {
         heartbeatExecutor.shutdownNow();
         if (webSocket != null) {
             webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "done");
+            try {
+                closed.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 

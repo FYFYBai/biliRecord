@@ -42,4 +42,32 @@ public final class RecorderManager {
         }
         return output.toAbsolutePath().normalize();
     }
+
+    public RecordingHandle start(
+            URI streamUrl,
+            long roomId,
+            Path output,
+            Path logFile,
+            SessionClock clock) throws IOException {
+        Files.createDirectories(output.toAbsolutePath().normalize().getParent());
+        Files.createDirectories(logFile.toAbsolutePath().normalize().getParent());
+        List<String> command = new ArrayList<>(List.of(
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel", "warning",
+                "-stats_period", "0.25",
+                "-progress", "pipe:1",
+                "-nostats",
+                "-user_agent", "biliRecord/0.1",
+                "-referer", "https://live.bilibili.com/" + roomId,
+                "-i", streamUrl.toString(),
+                "-map", "0:v:0",
+                "-map", "0:a?",
+                "-c", "copy",
+                output.toString()));
+        Process process = new ProcessBuilder(command)
+                .redirectErrorStream(true)
+                .start();
+        return new RecordingHandle(process, clock, output, logFile);
+    }
 }

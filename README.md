@@ -1,7 +1,8 @@
 # biliRecord
 
-A private Bilibili live monitor and recorder. It currently monitors room status
-and resolves available live stream variants.
+A private Bilibili live monitor and recorder. It monitors room status, resolves
+live streams and can automatically record a complete live session with its
+danmaku timeline.
 
 ## Requirements
 
@@ -76,8 +77,21 @@ java -jar target/bili-record.jar 92613 --record 30
 ```
 
 Recordings stay under the locally ignored `recordings/` directory. This phase
-records a requested duration; automatic start, stop, segmentation and recovery
-belong to the later lifecycle phases.
+records a requested duration.
+
+## Automatic recording
+
+Keep monitoring a room, start video and danmaku capture when it goes live, then
+stop after three consecutive offline confirmations five seconds apart:
+
+```shell
+java -jar target/bili-record.jar 92613 --auto
+```
+
+An automatic run writes one session directory containing `video/000000.mkv`,
+`logs/ffmpeg.log`, `timeline.sqlite` and `raw-events.jsonl`. Press Ctrl+C to
+finish the active session cleanly. Network and process recovery will be added
+in Phase 8.
 
 ## Listen to danmaku
 
@@ -99,9 +113,11 @@ recordings/room_<room-id>/<timestamp>/
 └── raw-events.jsonl
 ```
 
-Every decoded server event is written to JSONL with its receive timestamp.
-SQLite stores session metadata, the event index and parsed `DANMU_MSG` fields
-for later search and timeline work.
+Every decoded server event is written to JSONL with its receive timestamp,
+video-relative `sessionOffsetMs` and a server timestamp when the event provides
+one. SQLite stores the same timeline fields, session and video anchors,
+recording segments, and parsed `DANMU_MSG` fields for later search and playback
+seeking.
 
 The one-shot command prints `LIVE` when `live_status` is `1`; other room states
 print `OFFLINE`.
@@ -114,8 +130,8 @@ print `OFFLINE`.
 - [x] Phase 3: recorder
 - [x] Phase 4: danmaku client
 - [x] Phase 5: storage
-- [ ] Phase 6: session clock
-- [ ] Phase 7: lifecycle
+- [x] Phase 6: session clock
+- [x] Phase 7: lifecycle
 - [ ] Phase 8: recovery
 
 Authentication data and recordings are local-only and must not be committed.

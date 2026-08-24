@@ -22,7 +22,8 @@ public final class Main {
         }
 
         if (args.length < 1 || args.length > 3
-                || (args.length == 2 && !"--watch".equals(args[1]) && !"--streams".equals(args[1]))
+                || (args.length == 2 && !"--watch".equals(args[1])
+                && !"--streams".equals(args[1]) && !"--auto".equals(args[1]))
                 || (args.length == 3 && !"--record".equals(args[1]) && !"--danmaku".equals(args[1]))) {
             printUsage();
             System.exit(2);
@@ -41,6 +42,10 @@ public final class Main {
             }
             if (args.length == 2 && "--streams".equals(args[1])) {
                 printStreams(new StreamResolver().resolve(roomId));
+                return;
+            }
+            if (args.length == 2 && "--auto".equals(args[1])) {
+                new AutoRecorder().run(roomId);
                 return;
             }
             BiliHttpClient client = new BiliHttpClient();
@@ -148,7 +153,7 @@ public final class Main {
     private static void printUsage() {
         System.err.println("Usage:");
         System.err.println("  java -jar bili-record.jar --login");
-        System.err.println("  java -jar bili-record.jar <room-id-or-url> [--watch|--streams]");
+        System.err.println("  java -jar bili-record.jar <room-id-or-url> [--watch|--streams|--auto]");
         System.err.println("  java -jar bili-record.jar <room-id-or-url> --record <seconds>");
         System.err.println("  java -jar bili-record.jar <room-id-or-url> --danmaku <seconds>");
     }
