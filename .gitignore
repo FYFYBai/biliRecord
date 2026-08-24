@@ -1,0 +1,12 @@
+/target/
+/src/test/
+/.idea/
+/.vscode/
+*.iml
+
+/data/auth/
+/recordings/
+/logs/
+.env
+
+/bilibili_live_recorder_design.md
