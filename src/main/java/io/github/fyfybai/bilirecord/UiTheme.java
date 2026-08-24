@@ -15,6 +15,7 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 
 final class UiTheme {
+    static final String APP_NAME = "白沉的录播小工具";
     private static final String UI_FONT_FAMILY = findUiFont();
     static final Color BACKGROUND = new Color(0xF6F7F8);
     static final Color SURFACE = Color.WHITE;

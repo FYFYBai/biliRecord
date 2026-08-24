@@ -9,6 +9,7 @@ import java.nio.file.Path;
 
 final class DesktopSettingsStore {
     private static final Path DEFAULT_PATH = Path.of("data", "settings.json");
+    private static final Object FILE_LOCK = new Object();
 
     private final Path path;
     private final ObjectMapper objectMapper = new ObjectMapper()
@@ -23,13 +24,31 @@ final class DesktopSettingsStore {
     }
 
     DesktopSettings load() throws IOException {
-        return Files.exists(path)
-                ? objectMapper.readValue(path.toFile(), DesktopSettings.class)
-                : new DesktopSettings("");
+        synchronized (FILE_LOCK) {
+            return Files.exists(path)
+                    ? objectMapper.readValue(path.toFile(), DesktopSettings.class)
+                    : new DesktopSettings("", "");
+        }
     }
 
     void save(DesktopSettings settings) throws IOException {
-        Files.createDirectories(path.toAbsolutePath().normalize().getParent());
-        objectMapper.writeValue(path.toFile(), settings);
+        synchronized (FILE_LOCK) {
+            Files.createDirectories(path.toAbsolutePath().normalize().getParent());
+            objectMapper.writeValue(path.toFile(), settings);
+        }
+    }
+
+    void saveRoom(String room) throws IOException {
+        synchronized (FILE_LOCK) {
+            DesktopSettings current = load();
+            save(new DesktopSettings(room, current.exportDirectory()));
+        }
+    }
+
+    void saveExportDirectory(String exportDirectory) throws IOException {
+        synchronized (FILE_LOCK) {
+            DesktopSettings current = load();
+            save(new DesktopSettings(current.room(), exportDirectory));
+        }
     }
 }

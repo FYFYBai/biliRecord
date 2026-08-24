@@ -42,7 +42,7 @@ public final class RecorderWindow {
     private static final long DISK_WARNING_BYTES = 5L * 1024 * 1024 * 1024;
     private static final long DISK_CRITICAL_BYTES = 1024L * 1024 * 1024;
 
-    private final JFrame frame = new JFrame("biliRecord");
+    private final JFrame frame = new JFrame(UiTheme.APP_NAME);
     private final JTextField roomField = new JTextField();
     private final JButton monitorButton = new JButton("开始监控");
     private final JButton loginButton = new JButton("登录");
@@ -142,7 +142,7 @@ public final class RecorderWindow {
                 BorderFactory.createEmptyBorder(12, 22, 12, 22)));
 
         JLabel logo = new JLabel(UiTheme.brandIcon(36));
-        JLabel brand = new JLabel("biliRecord");
+        JLabel brand = new JLabel(UiTheme.APP_NAME);
         brand.setForeground(UiTheme.TEXT);
         brand.setFont(brand.getFont().deriveFont(Font.BOLD, 20f));
         JPanel identity = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
@@ -661,7 +661,7 @@ public final class RecorderWindow {
 
     private void saveSettings() {
         try {
-            settingsStore.save(new DesktopSettings(roomField.getText().strip()));
+            settingsStore.saveRoom(roomField.getText().strip());
         } catch (IOException exception) {
             LOG.log(Level.WARNING, "Could not save desktop settings", exception);
         }
@@ -711,7 +711,7 @@ public final class RecorderWindow {
 
     private void hideToTray() {
         frame.setVisible(false);
-        notifier.info("biliRecord 仍在运行", "监控和录制已转入后台");
+        notifier.info(UiTheme.APP_NAME + "仍在运行", "监控和录制已转入后台");
     }
 
     private void showFromTray() {

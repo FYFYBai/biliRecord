@@ -31,8 +31,8 @@ java -jar target/bili-record.jar
 The UI accepts a room number or full Bilibili Live URL. It shows the canonical
 room ID, anchor UID, title, live state, elapsed recording time, session size and
 free disk space. QR login and account switching are available from the top bar.
-The selected room is remembered in the ignored local file
-`data/settings.json`.
+The selected room and most recently chosen export directory are remembered in
+the ignored local file `data/settings.json`.
 
 The **录制记录** tab opens a V2.1 review window for completed local sessions.
 It plays all MKV segments as one session timeline, preserves gaps caused by a

@@ -30,7 +30,7 @@ final class DesktopNotifier implements AutoCloseable {
         trayMenu = new JPopupMenu();
         Font menuFont = UiTheme.uiFont(Font.PLAIN, 14f);
         trayMenu.setFont(menuFont);
-        JMenuItem showItem = new JMenuItem("打开 biliRecord");
+        JMenuItem showItem = new JMenuItem("打开 " + UiTheme.APP_NAME);
         showItem.setFont(menuFont);
         showItem.addActionListener(event -> SwingUtilities.invokeLater(showWindow));
         toggleItem = new JMenuItem("开始监控");
@@ -44,7 +44,7 @@ final class DesktopNotifier implements AutoCloseable {
         trayMenu.addSeparator();
         trayMenu.add(exitItem);
 
-        trayIcon = new TrayIcon(UiTheme.brandIcon(32).getImage(), "biliRecord");
+        trayIcon = new TrayIcon(UiTheme.brandIcon(32).getImage(), UiTheme.APP_NAME);
         trayIcon.setImageAutoSize(true);
         trayIcon.addActionListener(event -> SwingUtilities.invokeLater(showWindow));
         trayIcon.addMouseListener(new MouseAdapter() {

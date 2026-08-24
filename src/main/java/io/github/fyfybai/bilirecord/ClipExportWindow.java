@@ -35,6 +35,7 @@ final class ClipExportWindow {
 
     private final SessionTimeline timeline;
     private final LongSupplier currentPosition;
+    private final DesktopSettingsStore settingsStore = new DesktopSettingsStore();
     private final JDialog dialog;
     private final TimeFields start = new TimeFields();
     private final TimeFields end = new TimeFields();
@@ -46,6 +47,7 @@ final class ClipExportWindow {
     private final JButton closeButton = new JButton("关闭");
     private final JProgressBar progress = new JProgressBar(0, 1000);
     private final JLabel status = new JLabel(" ");
+    private Path exportDirectory;
     private boolean exporting;
 
     private ClipExportWindow(Window owner, SessionTimeline timeline, LongSupplier currentPosition) {
@@ -53,6 +55,7 @@ final class ClipExportWindow {
         this.currentPosition = currentPosition;
         dialog = new JDialog(owner, "导出片段", JDialog.ModalityType.MODELESS);
         end.setMillis(timeline.durationMs());
+        exportDirectory = loadExportDirectory();
         outputField.setText(defaultOutput().toString());
     }
 
@@ -191,8 +194,12 @@ final class ClipExportWindow {
                 .endsWith("." + format.extension()));
         chooser.setVisible(true);
         if (chooser.getFile() != null) {
-            outputField.setText(withExtension(
-                    Path.of(chooser.getDirectory(), chooser.getFile()), format).toString());
+            Path selected = withExtension(
+                    Path.of(chooser.getDirectory(), chooser.getFile()), format)
+                    .toAbsolutePath().normalize();
+            outputField.setText(selected.toString());
+            exportDirectory = selected.getParent();
+            rememberExportDirectory();
         }
     }
 
@@ -325,7 +332,27 @@ final class ClipExportWindow {
         ClipExporter.Format format = selectedFormat();
         String name = "clip_%s-%s.%s".formatted(
                 fileTime(0), fileTime(timeline.durationMs()), format.extension());
-        return timeline.summary().directory().resolve("exports").resolve(name).toAbsolutePath();
+        return exportDirectory.resolve(name).toAbsolutePath();
+    }
+
+    private Path loadExportDirectory() {
+        try {
+            String saved = settingsStore.load().exportDirectory();
+            if (!saved.isBlank()) {
+                return Path.of(saved).toAbsolutePath().normalize();
+            }
+        } catch (IOException | RuntimeException exception) {
+            LOG.log(Level.WARNING, "Could not load export directory", exception);
+        }
+        return timeline.summary().directory().resolve("exports").toAbsolutePath().normalize();
+    }
+
+    private void rememberExportDirectory() {
+        try {
+            settingsStore.saveExportDirectory(exportDirectory.toString());
+        } catch (IOException exception) {
+            LOG.log(Level.WARNING, "Could not remember export directory", exception);
+        }
     }
 
     private void updateOutputExtension() {

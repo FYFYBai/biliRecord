@@ -41,7 +41,7 @@ final class ReviewWindow {
             .ofPattern("yyyy-MM-dd HH:mm")
             .withZone(ZoneId.systemDefault());
 
-    private final JFrame frame = new JFrame("录制回看 - biliRecord");
+    private final JFrame frame = new JFrame("录制回看 - " + UiTheme.APP_NAME);
     private final SessionTimelineReader reader = new SessionTimelineReader();
     private final TranscriptionService transcriptionService = new TranscriptionService();
     private final TimelineTableModel timelineModel = new TimelineTableModel();
